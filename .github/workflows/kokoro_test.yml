@@ -128,13 +128,38 @@ jobs:
             -o /tmp/test_speech_british.wav \
             && [ -s /tmp/test_speech_british.wav ]
 
-          # Test streaming endpoint (pcm format — verifies stream=true path)
+          # Test streaming endpoint (pcm format — verifies stream_format="audio" path)
           curl -sf http://127.0.0.1:8880/v1/audio/speech \
             -H "Content-Type: application/json" \
             "${kokoro_curl_args[@]}" \
-            -d '{"model":"tts-1","input":"Hello world","voice":"af_heart","response_format":"pcm","stream":true}' \
+            -d '{"model":"tts-1","input":"Hello world","voice":"af_heart","response_format":"pcm","stream_format":"audio"}' \
             -o /tmp/test_speech_stream.pcm \
             && [ -s /tmp/test_speech_stream.pcm ]
+
+          # Test SSE streaming endpoint (verifies stream_format="sse" path)
+          curl -sf http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world","voice":"af_heart","response_format":"mp3","stream_format":"sse"}' \
+            -o /tmp/test_speech_sse.txt \
+            && grep -q "speech.audio.delta" /tmp/test_speech_sse.txt \
+            && grep -q "speech.audio.done" /tmp/test_speech_sse.txt
+
+          # Test required fields enforcement (missing voice should return 422)
+          http_code=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world"}' 2>/dev/null || true)
+          [ "$http_code" = "422" ] || { echo "Expected 422 without voice, got $http_code"; exit 1; }
+
+          # Test required fields enforcement (missing model should return 422)
+          http_code=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"input":"Hello world","voice":"af_heart"}' 2>/dev/null || true)
+          [ "$http_code" = "422" ] || { echo "Expected 422 without model, got $http_code"; exit 1; }
 
           # Test volume_multiplier field (verifies volume scaling path)
           curl -sf http://127.0.0.1:8880/v1/audio/speech \
