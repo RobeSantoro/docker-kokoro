@@ -13,7 +13,7 @@ Docker image to run a [Kokoro](https://github.com/hexgrad/kokoro) text-to-speech
 - Accepts both OpenAI voice names (`alloy`, `nova`, `echo`, ...) and native Kokoro voice IDs (`af_heart`, `bm_george`, ...)
 - Audio stays on your server — no data sent to third parties
 - All major output formats supported: `mp3`, `wav`, `flac`, `opus`, `aac`, `pcm`
-- Streaming support — set `stream=true` to receive audio as each sentence is synthesized, reducing time-to-first-audio
+- Streaming support — set `stream_format` to `"audio"` or `"sse"` to receive audio as each sentence is synthesized, reducing time-to-first-audio
 - NVIDIA GPU (CUDA) acceleration for faster inference (`:cuda` image tag)
 - Offline/air-gapped mode — run without internet access using pre-cached model (`KOKORO_LOCAL_ONLY`)
 - Automatically built and published via [GitHub Actions](https://github.com/hwdsl2/docker-kokoro/actions/workflows/main.yml)
@@ -260,7 +260,8 @@ Content-Type: application/json
 | `voice` | string | ✅ | Voice to use. See [available voices](#available-voices). Accepts Kokoro IDs or OpenAI aliases. |
 | `response_format` | string | — | Output format. Default: `mp3`. Options: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. |
 | `speed` | float | — | Speech speed. Default: `1.0`. Range: `0.25`–`4.0`. |
-| `stream` | boolean | — | Stream audio as it is synthesized. Default: `false`. When `true`, audio chunks are delivered via chunked transfer encoding as each sentence is ready, reducing time-to-first-audio. `pcm` and `wav` are the most efficient streaming formats; `mp3` and `aac` also stream cleanly. |
+| `instructions` | string | — | Control the voice with additional instructions. Accepted for API compatibility but not currently supported by the Kokoro engine (ignored). |
+| `stream_format` | string | — | The format to stream the audio in. Options: `audio`, `sse`. When set to `audio`, audio bytes are streamed via chunked transfer encoding. When set to `sse`, the response uses Server-Sent Events with `speech.audio.delta` and `speech.audio.done` events (OpenAI streaming speech protocol). If omitted, the full audio is returned as a single response. |
 | `volume_multiplier` | float | — | Output volume multiplier. Default: `1.0`. Range: `0.1`–`2.0`. Values above `1.0` amplify, below `1.0` attenuate. Samples are clipped after scaling to prevent distortion. |
 
 **Example:**

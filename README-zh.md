@@ -13,7 +13,7 @@
 - 同时支持 OpenAI 语音名称（`alloy`、`nova`、`echo` 等）和原生 Kokoro 语音 ID（`af_heart`、`bm_george` 等）
 - 音频保留在您的服务器上 —— 不向第三方发送数据
 - 支持所有主流输出格式：`mp3`、`wav`、`flac`、`opus`、`aac`、`pcm`
-- 流式传输支持 —— 设置 `stream=true` 可在每句话合成完成后立即接收音频，减少首次出声的等待时间
+- 流式传输支持 —— 设置 `stream_format` 为 `"audio"` 或 `"sse"` 可在每句话合成完成后立即接收音频，减少首次出声的等待时间
 - NVIDIA GPU（CUDA）加速推理（`:cuda` 镜像标签）
 - 离线/气隙模式 —— 使用预缓存模型无需访问互联网（`KOKORO_LOCAL_ONLY`）
 - 通过 [GitHub Actions](https://github.com/hwdsl2/docker-kokoro/actions/workflows/main.yml) 自动构建和发布
@@ -260,7 +260,8 @@ Content-Type: application/json
 | `voice` | 字符串 | ✅ | 使用的语音。参见[可用语音](#可用语音)。支持 Kokoro ID 或 OpenAI 别名。 |
 | `response_format` | 字符串 | — | 输出格式。默认：`mp3`。选项：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。 |
 | `speed` | 浮点数 | — | 语速。默认：`1.0`。范围：`0.25`–`4.0`。 |
-| `stream` | 布尔值 | — | 合成时流式传输音频。默认：`false`。为 `true` 时，每合成完一句话即通过分块传输编码发送音频块，减少首次出声的等待时间。`pcm` 和 `wav` 是最高效的流式格式；`mp3` 和 `aac` 也支持流式传输。 |
+| `instructions` | 字符串 | — | 通过附加指令控制语音。为 API 兼容性而接受，但 Kokoro 引擎当前不支持（将被忽略）。 |
+| `stream_format` | 字符串 | — | 音频流式传输格式。选项：`audio`、`sse`。设为 `audio` 时，音频字节通过分块传输编码传送。设为 `sse` 时，响应使用 Server-Sent Events，包含 `speech.audio.delta` 和 `speech.audio.done` 事件（OpenAI 流式语音协议）。省略时返回完整音频。 |
 | `volume_multiplier` | 浮点数 | — | 输出音量倍数。默认：`1.0`。范围：`0.1`–`2.0`。大于 `1.0` 时增大音量，小于 `1.0` 时减小音量。缩放后样本将被截断以防止失真。 |
 
 **示例：**
