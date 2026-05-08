@@ -13,7 +13,9 @@ See: https://opensource.org/licenses/MIT
 """
 
 import asyncio
+import base64
 import io
+import json
 import logging
 import os
 import struct
@@ -21,7 +23,7 @@ import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 import soundfile as sf
@@ -474,6 +476,86 @@ async def _stream_audio(
                 return
 
 
+async def _stream_audio_sse(
+    text: str,
+    voice_id: str,
+    speed: float,
+    fmt: str,
+    volume: float = 1.0,
+):
+    """
+    Async generator that yields Server-Sent Events (SSE) using the OpenAI
+    streaming speech protocol.
+
+    Event types emitted:
+      - speech.audio.delta  — base64-encoded audio chunk
+      - speech.audio.done   — synthesis complete
+
+    The stream is terminated with a `data: [DONE]` sentinel, matching the
+    OpenAI SDK expectations.
+    """
+    pipeline = _get_pipeline(voice_id)
+    loop = asyncio.get_running_loop()
+    chunk_queue: asyncio.Queue = asyncio.Queue()
+
+    def _run() -> None:
+        with _inference_lock:
+            try:
+                for _gs, _ps, audio in pipeline(text, voice=voice_id, speed=speed):
+                    if audio is not None and len(audio) > 0:
+                        loop.call_soon_threadsafe(chunk_queue.put_nowait, audio)
+            except Exception as exc:  # noqa: BLE001
+                loop.call_soon_threadsafe(chunk_queue.put_nowait, exc)
+            finally:
+                loop.call_soon_threadsafe(chunk_queue.put_nowait, None)  # sentinel
+
+    loop.run_in_executor(None, _run)
+
+    while True:
+        item = await chunk_queue.get()
+        if item is None:
+            break
+        if isinstance(item, Exception):
+            logger.error("Streaming synthesis error: %s", item)
+            err_payload = json.dumps({
+                "error": {
+                    "type": "synthesis_error",
+                    "message": str(item),
+                }
+            })
+            yield f"data: {err_payload}\n\n"
+            return
+
+        # Ensure chunk is a numpy array
+        if not isinstance(item, np.ndarray):
+            if hasattr(item, "detach"):
+                item = item.detach().cpu().numpy()
+            else:
+                item = np.asarray(item)
+
+        # Apply volume multiplier before encoding
+        if volume != 1.0:
+            item = (item * volume).clip(-1.0, 1.0)
+
+        # Encode audio chunk to the requested format
+        try:
+            audio_bytes = _audio_to_bytes(item, 24000, fmt)
+        except Exception as exc:
+            logger.error("SSE chunk encoding to %s failed: %s", fmt, exc)
+            return
+
+        # Emit speech.audio.delta event with base64-encoded audio
+        payload = json.dumps({
+            "type": "speech.audio.delta",
+            "audio": base64.b64encode(audio_bytes).decode("ascii"),
+        })
+        yield f"data: {payload}\n\n"
+
+    # Emit speech.audio.done event
+    yield f'data: {json.dumps({"type": "speech.audio.done"})}\n\n'
+    yield "data: [DONE]\n\n"
+
+
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
@@ -481,7 +563,7 @@ async def _stream_audio(
 
 class SpeechRequest(BaseModel):
     model: str = Field(
-        default="tts-1",
+        ...,
         description="Model identifier. Accepted values: 'tts-1', 'tts-1-hd', 'kokoro'. "
                     "All values use the Kokoro-82M model.",
     )
@@ -490,34 +572,42 @@ class SpeechRequest(BaseModel):
         max_length=4096,
         description="The text to synthesize. Maximum 4096 characters.",
     )
-    voice: Optional[str] = Field(
-        default=None,
+    voice: str = Field(
+        ...,
         description=(
-            "Voice to use. Accepts OpenAI voice names (alloy, echo, fable, onyx, nova, shimmer) "
-            "or native Kokoro voice IDs (af_heart, bm_george, etc.). "
-            "If omitted, the server default (KOKORO_VOICE env var) is used. "
-            "See GET /v1/voices for all available voices."
+            "Voice to use. Accepts OpenAI voice names (alloy, ash, coral, echo, fable, "
+            "onyx, nova, sage, shimmer, verse) or native Kokoro voice IDs "
+            "(af_heart, bm_george, etc.). See GET /v1/voices for all available voices."
         ),
     )
-    response_format: str = Field(
-        default="mp3",
-        description="Output audio format: mp3, opus, aac, flac, wav, pcm",
+    instructions: Optional[str] = Field(
+        default=None,
+        max_length=4096,
+        description=(
+            "Control the voice of your generated audio with additional instructions. "
+            "This parameter is accepted for API compatibility but is not currently "
+            "supported by the Kokoro engine and will be ignored."
+        ),
     )
-    speed: float = Field(
+    response_format: Optional[Literal["mp3", "opus", "aac", "flac", "wav", "pcm"]] = Field(
+        default="mp3",
+        description="The format to audio in. Supported formats are mp3, opus, aac, flac, wav, and pcm.",
+    )
+    speed: Optional[float] = Field(
         default=1.0,
         ge=0.25,
         le=4.0,
-        description="Speech speed multiplier. Range: 0.25 (slowest) to 4.0 (fastest).",
+        description="The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.",
     )
-    stream: bool = Field(
-        default=False,
+    stream_format: Optional[Literal["sse", "audio"]] = Field(
+        default=None,
         description=(
-            "Stream audio chunks as they are synthesized. "
-            "When true, the response body is a continuous audio stream delivered "
-            "via chunked transfer encoding — playback can begin before synthesis "
-            "of the full text completes, reducing time-to-first-audio. "
-            "pcm and wav are the most efficient streaming formats; mp3 and aac "
-            "also stream cleanly. response_format is honoured for all formats."
+            "The format to stream the audio in. Supported formats are 'sse' and "
+            "'audio'. When set to 'audio', audio bytes are streamed via chunked "
+            "transfer encoding. When set to 'sse', the response is a "
+            "text/event-stream with speech.audio.delta events containing "
+            "base64-encoded audio chunks, followed by a speech.audio.done event. "
+            "If not set, the full audio is returned as a single response."
         ),
     )
     volume_multiplier: float = Field(
@@ -585,10 +675,11 @@ async def create_speech(
 
     Supported output formats: mp3, opus, aac, flac, wav, pcm
 
-    When stream=true the response uses chunked transfer encoding and audio
-    playback can begin before the full text has been synthesized.  pcm and wav
-    are the most efficient streaming formats; mp3 and aac also stream cleanly
-    because their container frames are self-synchronising.
+    When stream_format is set to 'audio', the response uses chunked transfer
+    encoding and audio playback can begin before the full text has been
+    synthesized.  When stream_format is 'sse', the response is a
+    text/event-stream with speech.audio.delta and speech.audio.done events
+    following the OpenAI streaming speech protocol.
     """
     if not _pipelines:
         raise HTTPException(status_code=503, detail="Kokoro engine is not loaded yet. Please retry.")
@@ -604,9 +695,8 @@ async def create_speech(
     if not req.input.strip():
         raise HTTPException(status_code=400, detail="'input' must not be empty.")
 
-    # Resolve voice: per-request value > KOKORO_VOICE env var > built-in default
-    env_voice = os.environ.get("KOKORO_VOICE", "af_heart").strip()
-    voice_id = _resolve_voice(req.voice) if req.voice else _resolve_voice(env_voice)
+    # Resolve voice
+    voice_id = _resolve_voice(req.voice)
 
     # Per-request speed overrides env default, env default overrides built-in default
     env_speed = float(os.environ.get("KOKORO_SPEED", "1.0"))
@@ -615,15 +705,25 @@ async def create_speech(
     volume = req.volume_multiplier
 
     logger.info(
-        "Synthesizing %d chars | voice=%s speed=%.2f format=%s stream=%s volume=%.2f",
-        len(req.input), voice_id, speed, req.response_format, req.stream, volume,
+        "Synthesizing %d chars | voice=%s speed=%.2f format=%s stream_format=%s volume=%.2f",
+        len(req.input), voice_id, speed, req.response_format, req.stream_format, volume,
     )
 
     # ------------------------------------------------------------------
     # Streaming path — synthesis runs in a thread; audio chunks are
     # yielded to the client as soon as each sentence is ready.
     # ------------------------------------------------------------------
-    if req.stream:
+    if req.stream_format == "sse":
+        return StreamingResponse(
+            _stream_audio_sse(req.input, voice_id, speed, req.response_format, volume),
+            media_type="text/event-stream",
+            headers={
+                "X-Accel-Buffering": "no",
+                "Cache-Control": "no-cache",
+            },
+        )
+
+    if req.stream_format == "audio":
         return StreamingResponse(
             _stream_audio(req.input, voice_id, speed, req.response_format, volume),
             media_type=_FORMAT_MIME[req.response_format],
