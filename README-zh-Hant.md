@@ -193,6 +193,7 @@ services:
 
 volumes:
   kokoro-data:
+    name: kokoro-data
 ```
 
 **注：** 如需面向公網部署，強烈建議使用[反向代理](#使用反向代理)啟用 HTTPS。此時請將 `docker-compose.yml` 中的 `"8880:8880/tcp"` 改為 `"127.0.0.1:8880:8880/tcp"`，以防止未加密連接埠被直接存取。當伺服器可從公用網際網路存取時，請在 `env` 檔案中設定 `KOKORO_API_KEY`。
@@ -232,6 +233,7 @@ services:
 
 volumes:
   kokoro-data:
+    name: kokoro-data
 ```
 
 </details>
