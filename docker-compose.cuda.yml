@@ -18,3 +18,4 @@ services:
 
 volumes:
   kokoro-data:
+    name: kokoro-data
