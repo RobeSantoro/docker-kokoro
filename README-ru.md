@@ -27,7 +27,7 @@ Docker-образ для запуска сервера синтеза речи [
 - VPN: [WireGuard](https://github.com/hwdsl2/docker-wireguard/blob/main/README-ru.md), [OpenVPN](https://github.com/hwdsl2/docker-openvpn/blob/main/README-ru.md), [IPsec VPN](https://github.com/hwdsl2/docker-ipsec-vpn-server/blob/master/README-ru.md), [Headscale](https://github.com/hwdsl2/docker-headscale/blob/main/README-ru.md)
 - Инструменты: [MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-ru.md)
 
-**Совет:** Whisper, Kokoro, Embeddings, LiteLLM, Ollama и MCP-шлюз можно [использовать совместно](#использование-с-другими-ai-сервисами) для построения полного self-hosted AI-стека на собственном сервере. См. [Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack) — готовые конфигурации и примеры конвейеров.
+**Совет:** Whisper, Kokoro, Embeddings, LiteLLM, Ollama и MCP-шлюз можно [использовать совместно](#использование-с-другими-ai-сервисами) для построения полного self-hosted AI-стека на собственном сервере. Быстрый старт с [Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack). Разверните полный стек одной командой.
 
 ## Быстрый старт
 
@@ -510,7 +510,7 @@ docker rm -f kokoro
 | **[Ollama (LLM)](https://github.com/hwdsl2/docker-ollama/blob/main/README-ru.md)** | Запускает локальные LLM-модели (llama3, qwen, mistral и др.) | `11434` |
 | **[MCP-шлюз](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-ru.md)** | Предоставляет сервисы ИИ как MCP-инструменты для ИИ-ассистентов (Claude, Cursor и др.) | `3000` |
 
-**См. также: [Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack)** — готовые docker-compose конфигурации и примеры конвейеров. Узнайте больше о развёртывании полного AI-стека.
+**См. также: [Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack)** — разверните полный стек одной командой, с готовыми конфигурациями и примерами конвейеров.
 
 ## Технические подробности
 

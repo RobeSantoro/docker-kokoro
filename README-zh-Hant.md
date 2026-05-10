@@ -27,7 +27,7 @@
 - VPN：[WireGuard](https://github.com/hwdsl2/docker-wireguard/blob/main/README-zh-Hant.md)、[OpenVPN](https://github.com/hwdsl2/docker-openvpn/blob/main/README-zh-Hant.md)、[IPsec VPN](https://github.com/hwdsl2/docker-ipsec-vpn-server/blob/master/README-zh-Hant.md)、[Headscale](https://github.com/hwdsl2/docker-headscale/blob/main/README-zh-Hant.md)
 - 工具：[MCP Gateway](https://github.com/hwdsl2/docker-mcp-gateway/blob/main/README-zh-Hant.md)
 
-**提示：** Whisper、Kokoro、Embeddings、LiteLLM、Ollama 和 MCP 閘道可以[搭配使用](#與其他-ai-服務搭配使用)，在您自己的伺服器上建立完整的自託管 AI 系統。參見 [Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack)，取得現成的設定和流水線範例。
+**提示：** Whisper、Kokoro、Embeddings、LiteLLM、Ollama 和 MCP 閘道可以[搭配使用](#與其他-ai-服務搭配使用)，在您自己的伺服器上建立完整的自託管 AI 系統。使用 [Docker AI Stack](https://github.com/hwdsl2/docker-ai-stack) 快速開始，一條命令即可部署完整技術堆疊。
 
 ## 快速開始
 
