@@ -31,6 +31,10 @@ Docker image to run a [Kokoro](https://github.com/hexgrad/kokoro) text-to-speech
 
 **Tip:** Whisper, Kokoro, Embeddings, LiteLLM, Ollama, Docling, and MCP Gateway can be [used together](#using-with-other-ai-services) to build a complete, self-hosted AI stack on your own server.
 
+## Community
+
+- Discussions and showcases: [r/selfhostedstack](https://www.reddit.com/r/selfhostedstack/)
+
 ## Quick start
 
 Use this command to set up a Kokoro TTS server:
