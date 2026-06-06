@@ -456,6 +456,27 @@ docker restart kokoro
 
 > **Note:** Individual API requests can always specify a different voice using the `voice` field, regardless of the container default.
 
+## Securing your server
+
+If your Kokoro TTS server is reachable from the public internet — even briefly — apply at minimum these protections. Kokoro is CPU/GPU-intensive, so an unauthenticated endpoint can be abused to burn your compute resources.
+
+**1. Set an API key.** Generate a strong random key and set `KOKORO_API_KEY` in your `env` file. All API requests must then include `Authorization: Bearer <key>`.
+
+```bash
+# Generate a 32-byte random key
+openssl rand -hex 32
+```
+
+**2. Bind to localhost when fronted by a reverse proxy.** Replace `-p 8880:8880` with `-p 127.0.0.1:8880:8880` (or change `"8880:8880/tcp"` to `"127.0.0.1:8880:8880/tcp"` in `docker-compose.yml`) so the unencrypted port is not reachable directly from outside the host.
+
+**3. Limit request body size at the proxy.** TTS requests carry text input; configure your reverse proxy to reject oversized request bodies (e.g. nginx `client_max_body_size 1M;`).
+
+**4. Mind the log level.** `KOKORO_LOG_LEVEL=DEBUG` may write input text to logs. Keep it at `INFO` or higher on shared systems.
+
+**5. Enable CORS at the proxy if calling from a browser.** The server does not set `Access-Control-Allow-Origin` headers by default; add them at your reverse proxy if you intend to call the API directly from a web page on a different origin.
+
+**6. Consider rate limiting.** Place a rate-limit (e.g. nginx `limit_req_zone`, Caddy `rate_limit`) in front of the server to cap concurrent synthesis requests per client IP.
+
 ## Using a reverse proxy
 
 For internet-facing deployments, place a reverse proxy in front of the TTS server to handle HTTPS termination. The server works without HTTPS on a local or trusted network, but HTTPS is recommended when the API endpoint is exposed to the internet.

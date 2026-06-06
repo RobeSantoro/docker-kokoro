@@ -441,6 +441,27 @@ docker restart kokoro
 
 > **注：** 單次 API 請求始終可以透過 `voice` 欄位指定不同的語音，不受容器預設設定影響。
 
+## 保護你的伺服器
+
+如果你的 Kokoro TTS 伺服器可從公用網際網路存取 —— 即使只是短暫可達 —— 也請至少採取以下保護措施。Kokoro 對 CPU/GPU 資源消耗較大，未做身分驗證的介面可能被濫用，浪費你的運算資源。
+
+**1. 設定 API 金鑰。** 產生一個強隨機金鑰並在 `env` 檔案中設定 `KOKORO_API_KEY`。之後所有 API 請求必須包含 `Authorization: Bearer <key>`。
+
+```bash
+# 產生 32 位元組的隨機金鑰
+openssl rand -hex 32
+```
+
+**2. 在反向代理後方時繫結到 localhost。** 將 `-p 8880:8880` 替換為 `-p 127.0.0.1:8880:8880`（或在 `docker-compose.yml` 中將 `"8880:8880/tcp"` 改為 `"127.0.0.1:8880:8880/tcp"`），使未加密連接埠無法從主機外部直接存取。
+
+**3. 在代理處限制請求主體大小。** TTS 請求攜帶文字輸入；設定反向代理以拒絕過大的請求主體（例如 nginx `client_max_body_size 1M;`）。
+
+**4. 注意日誌等級。** `KOKORO_LOG_LEVEL=DEBUG` 可能會將輸入文字寫入日誌。在共用系統上請保持 `INFO` 或更高等級。
+
+**5. 瀏覽器呼叫時在代理處啟用 CORS。** 本伺服器預設不設定 `Access-Control-Allow-Origin` 回應標頭；若需在不同來源的網頁中直接呼叫本 API，請在反向代理處新增 CORS 標頭。
+
+**6. 考慮限流。** 在伺服器前部署限流（如 nginx `limit_req_zone`、Caddy `rate_limit`），限制每個用戶端 IP 的並行合成請求數。
+
 ## 使用反向代理
 
 對於面向網際網路的部署，請在 TTS 伺服器前放置反向代理以處理 HTTPS 終止。
