@@ -8,6 +8,7 @@ on:
       - '.github/workflows/test.yml'
       - '.github/workflows/shellcheck.yml'
       - '.github/workflows/kokoro_test.yml'
+      - '.github/workflows/tests/**'
 
 jobs:
   shellcheck:

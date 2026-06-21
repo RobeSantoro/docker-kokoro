@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: Unit tests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .github/workflows/tests
       - name: Test
         run: |
           [ ! -x /usr/bin/docker ] && exit 1
@@ -302,6 +304,37 @@ jobs:
             -d '{"model":"tts-1","input":"Hello world","voice":"alloy","response_format":"wav"}' \
             -o /tmp/test_speech_alias.wav \
             && [ -s /tmp/test_speech_alias.wav ]
+
+          # Test OpenAI voice object (verifies voice.id request shape)
+          curl -sf http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world","voice":{"id":"alloy"},"response_format":"wav"}' \
+            -o /tmp/test_speech_voice_object.wav \
+            && [ -s /tmp/test_speech_voice_object.wav ]
+
+          # Test newer OpenAI voice alias (verifies extended alias mapping path)
+          curl -sf http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world","voice":"ballad","response_format":"wav"}' \
+            -o /tmp/test_speech_ballad.wav \
+            && [ -s /tmp/test_speech_ballad.wav ]
+
+          # Test unknown voices return 400 instead of falling back silently
+          http_code=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world","voice":"not_a_voice"}' 2>/dev/null || true)
+          [ "$http_code" = "400" ] || { echo "Expected 400 for unknown voice, got $http_code"; exit 1; }
+
+          http_code=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world","voice":{"id":"not_a_voice"}}' 2>/dev/null || true)
+          [ "$http_code" = "400" ] || { echo "Expected 400 for unknown voice object, got $http_code"; exit 1; }
 
           # Test voices endpoint (verify non-English voices are listed)
           curl -sf http://127.0.0.1:8880/v1/voices \
