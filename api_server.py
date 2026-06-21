@@ -23,7 +23,7 @@ import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
-from typing import Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import soundfile as sf
@@ -135,24 +135,51 @@ _OPENAI_VOICE_MAP = {
     "coral":   "af_heart",
     "sage":    "af_sky",
     "verse":   "bm_george",
+    "ballad":  "bm_lewis",
+    "marin":   "af_nicole",
+    "cedar":   "am_adam",
 }
 
-def _resolve_voice(voice: str) -> str:
+
+class VoiceReference(BaseModel):
+    id: str = Field(..., description="Local Kokoro voice ID or supported OpenAI voice alias.")
+
+
+def _voice_id_from_request(voice: Union[str, VoiceReference, dict[str, Any]]) -> str:
+    if isinstance(voice, str):
+        return voice
+    if isinstance(voice, VoiceReference):
+        return voice.id
+    if isinstance(voice, dict) and "id" in voice:
+        return str(voice["id"])
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid voice value. Provide a voice string or an object with an 'id' field.",
+    )
+
+
+def _resolve_voice(voice: Union[str, VoiceReference, dict[str, Any]]) -> str:
     """
     Accept OpenAI voice alias or a native Kokoro voice ID.
     Returns the resolved Kokoro voice ID.
     """
-    v = voice.strip().lower()
+    raw_voice = _voice_id_from_request(voice)
+    v = raw_voice.strip().lower()
+    if not v:
+        raise HTTPException(
+            status_code=400,
+            detail="Voice must not be empty. Use GET /v1/voices to list supported voices.",
+        )
     # Direct Kokoro name (e.g. "af_heart")
     if v in KOKORO_VOICES:
         return v
     # OpenAI alias (e.g. "alloy")
     if v in _OPENAI_VOICE_MAP:
         return _OPENAI_VOICE_MAP[v]
-    # Unknown — fall back to default
-    default = os.environ.get("KOKORO_VOICE", "af_heart").strip()
-    logger.warning("Unknown voice '%s', falling back to '%s'", voice, default)
-    return default
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unknown voice '{raw_voice}'. Use GET /v1/voices to list supported voices.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -582,11 +609,12 @@ class SpeechRequest(BaseModel):
         max_length=4096,
         description="The text to synthesize. Maximum 4096 characters.",
     )
-    voice: str = Field(
+    voice: Union[str, VoiceReference] = Field(
         ...,
         description=(
-            "Voice to use. Accepts OpenAI voice names (alloy, ash, coral, echo, fable, "
-            "onyx, nova, sage, shimmer, verse) or native Kokoro voice IDs "
+            "Voice to use. Accepts OpenAI voice names (alloy, ash, ballad, cedar, "
+            "coral, echo, fable, marin, onyx, nova, sage, shimmer, verse), "
+            "a voice object with an id field, or native Kokoro voice IDs "
             "(af_heart, bm_george, etc.). See GET /v1/voices for all available voices."
         ),
     )
