@@ -72,7 +72,7 @@ docker run \
 
 **重要：** 由於包含 PyTorch 執行階段與 Kokoro 模型，該映像需要至少 1.5 GB 可用記憶體。總記憶體為 1 GB 或更少的系統不受支援。
 
-**注：** 如需面向網際網路的部署，**強烈建議**使用[反向代理](#使用反向代理)來新增 HTTPS。此時，還應將上述 `docker run` 指令中的 `-p 8880:8880` 替換為 `-p 127.0.0.1:8880:8880`，以防止從外部直接存取未加密連接埠。當伺服器可從公用網際網路存取時，請在 `env` 檔案中設定 `KOKORO_API_KEY`。
+**注：** 如需面向網際網路的部署，**強烈建議**使用[反向代理](#使用反向代理)來新增 HTTPS。此時，還應將上述 `docker run` 指令中的 `-p 8880:8880` 替換為 `-p 127.0.0.1:8880:8880`，以防止從外部直接存取未加密連接埠。
 
 Kokoro 模型（約 320 MB）將在首次啟動時自動下載並快取。查看日誌確認伺服器已就緒：
 
@@ -130,7 +130,7 @@ docker image tag quay.io/hwdsl2/kokoro-server hwdsl2/kokoro-server
 
 ## 環境變數
 
-所有變數均為選填。設定 `KOKORO_API_KEY` 可啟用 Bearer Token 驗證。
+所有變數均為選填。掛載 `/var/lib/kokoro` 資料卷的新安裝會自動產生 Bearer 令牌。沒有金鑰的既有安裝會保持開放以相容舊行為。
 
 此 Docker 映像使用以下變數，可在 `env` 檔案中宣告（參見[範例](kokoro.env.example)）：
 
@@ -140,7 +140,7 @@ docker image tag quay.io/hwdsl2/kokoro-server hwdsl2/kokoro-server
 | `KOKORO_SPEED` | 預設語速。範圍：`0.25`（最慢）到 `4.0`（最快）。 | `1.0` |
 | `KOKORO_PORT` | API 的 HTTP 埠（1–65535）。 | `8880` |
 | `KOKORO_LANG_CODE` | 若已設定，則在啟動時僅載入該語言的語音處理管線（`a`=美式英語，`b`=英式英語，`e`=西班牙語，`f`=法語，`h`=印地語，`i`=義大利語，`j`=日語，`p`=巴西葡萄牙語，`z`=國語）。未設定時，根據 `KOKORO_VOICE` 前綴自動選擇語音處理管線。當請求使用其他語言時，會依需求建立對應的語音處理管線。 | *(未設定)* |
-| `KOKORO_API_KEY` | 選填的 Bearer 權杖。設定後，所有 API 請求須包含 `Authorization: Bearer <key>`。 | *(未設定)* |
+| `KOKORO_API_KEY` | 選填的 Bearer 權杖。新持久化安裝會自動產生。設定後所有 API 請求須包含 `Authorization: Bearer <key>`。明確設定為空可停用驗證。 | 新持久化安裝自動產生 |
 | `KOKORO_LOG_LEVEL` | 日誌等級：`DEBUG`、`INFO`、`WARNING`、`ERROR`、`CRITICAL`。 | `INFO` |
 | `KOKORO_LOCAL_ONLY` | 設定為任意非空值（例如 `true`）時，停用所有 HuggingFace 模型下載。適用於離線或氣隙部署（需預快取模型）。 | *(未設定)* |
 
@@ -205,7 +205,7 @@ volumes:
     name: kokoro-data
 ```
 
-**注：** 如需面向公網部署，強烈建議使用[反向代理](#使用反向代理)啟用 HTTPS。此時請將 `docker-compose.yml` 中的 `"8880:8880/tcp"` 改為 `"127.0.0.1:8880:8880/tcp"`，以防止未加密連接埠被直接存取。當伺服器可從公用網際網路存取時，請在 `env` 檔案中設定 `KOKORO_API_KEY`。
+**注：** 如需面向公網部署，強烈建議使用[反向代理](#使用反向代理)啟用 HTTPS。此時請將 `docker-compose.yml` 中的 `"8880:8880/tcp"` 改為 `"127.0.0.1:8880:8880/tcp"`，以防止未加密連接埠被直接存取。
 
 <details>
 <summary><strong>使用 docker-compose 啟用 GPU（NVIDIA CUDA）</strong></summary>
@@ -446,7 +446,7 @@ docker restart kokoro
 
 如果你的 Kokoro TTS 伺服器可從公用網際網路存取 —— 即使只是短暫可達 —— 也請至少採取以下保護措施。Kokoro 對 CPU/GPU 資源消耗較大，未做身分驗證的介面可能被濫用，浪費你的運算資源。
 
-**1. 設定 API 金鑰。** 產生一個強隨機金鑰並在 `env` 檔案中設定 `KOKORO_API_KEY`。之後所有 API 請求必須包含 `Authorization: Bearer <key>`。
+**1. 使用 API 金鑰。** 掛載 `/var/lib/kokoro` 資料卷的新安裝會自動產生 API 金鑰。可用 `docker exec kokoro kokoro_manage --showkey` 查看；腳本中可用 `docker exec kokoro kokoro_manage --getkey`。沒有金鑰的既有安裝會保持開放以相容舊行為；也可以在 `env` 檔案中設定 `KOKORO_API_KEY` 手動啟用驗證。所有已驗證請求必須包含 `Authorization: Bearer <key>`。
 
 ```bash
 # 產生 32 位元組的隨機金鑰
@@ -501,8 +501,6 @@ server {
     }
 }
 ```
-
-面向公開網際網路時，請在 `env` 檔案中設定 `KOKORO_API_KEY`。
 
 ## 更新 Docker 映像
 

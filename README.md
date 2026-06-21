@@ -72,7 +72,7 @@ docker run \
 
 **Important:** This image requires at least 1.5 GB of available RAM due to the PyTorch runtime and Kokoro model. Systems with 1 GB or less of total RAM are not supported.
 
-**Note:** For internet-facing deployments, using a [reverse proxy](#using-a-reverse-proxy) to add HTTPS is **strongly recommended**. In that case, also replace `-p 8880:8880` with `-p 127.0.0.1:8880:8880` in the `docker run` command above, to prevent direct access to the unencrypted port. Set `KOKORO_API_KEY` in your `env` file when the server is accessible from the public internet.
+**Note:** For internet-facing deployments, using a [reverse proxy](#using-a-reverse-proxy) to add HTTPS is **strongly recommended**. In that case, also replace `-p 8880:8880` with `-p 127.0.0.1:8880:8880` in the `docker run` command above, to prevent direct access to the unencrypted port.
 
 The Kokoro model (~320 MB) is downloaded and cached on first start. Check the logs to confirm the server is ready:
 
@@ -130,7 +130,7 @@ Supported platforms: `linux/amd64` and `linux/arm64`. The `:cuda` tag supports `
 
 ## Environment variables
 
-All variables are optional. Set `KOKORO_API_KEY` to enable Bearer token authentication.
+All variables are optional. Fresh installs with a mounted `/var/lib/kokoro` volume auto-generate a Bearer token. Existing installs without a key remain open for backward compatibility.
 
 This Docker image uses the following variables, that can be declared in an `env` file (see [example](kokoro.env.example)):
 
@@ -140,7 +140,7 @@ This Docker image uses the following variables, that can be declared in an `env`
 | `KOKORO_SPEED` | Default speech speed. Range: `0.25` (slowest) to `4.0` (fastest). | `1.0` |
 | `KOKORO_PORT` | HTTP port for the API (1–65535). | `8880` |
 | `KOKORO_LANG_CODE` | If set, loads only that language pipeline at startup (`a`=American English, `b`=British English, `e`=Spanish, `f`=French, `h`=Hindi, `i`=Italian, `j`=Japanese, `p`=Brazilian Portuguese, `z`=Mandarin Chinese). When unset, the pipeline is auto-selected from the `KOKORO_VOICE` prefix. Additional pipelines are created on demand when a request uses a different language. | *(not set)* |
-| `KOKORO_API_KEY` | Optional Bearer token. If set, all API requests must include `Authorization: Bearer <key>`. | *(not set)* |
+| `KOKORO_API_KEY` | Optional Bearer token. Fresh persistent installs auto-generate one. If set, all API requests must include `Authorization: Bearer <key>`. Set explicitly empty to disable authentication. | Auto-generated for fresh persistent installs |
 | `KOKORO_LOG_LEVEL` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. | `INFO` |
 | `KOKORO_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables all HuggingFace model downloads. For offline or air-gapped deployments with pre-cached model. | *(not set)* |
 
@@ -205,7 +205,7 @@ volumes:
     name: kokoro-data
 ```
 
-**Note:** For internet-facing deployments, using a [reverse proxy](#using-a-reverse-proxy) to add HTTPS is **strongly recommended**. In that case, also change `"8880:8880/tcp"` to `"127.0.0.1:8880:8880/tcp"` in `docker-compose.yml`, to prevent direct access to the unencrypted port. Set `KOKORO_API_KEY` in your `env` file when the server is accessible from the public internet.
+**Note:** For internet-facing deployments, using a [reverse proxy](#using-a-reverse-proxy) to add HTTPS is **strongly recommended**. In that case, also change `"8880:8880/tcp"` to `"127.0.0.1:8880:8880/tcp"` in `docker-compose.yml`, to prevent direct access to the unencrypted port.
 
 <details>
 <summary><strong>Using docker-compose with GPU (NVIDIA CUDA)</strong></summary>
@@ -461,7 +461,7 @@ docker restart kokoro
 
 If your Kokoro TTS server is reachable from the public internet — even briefly — apply at minimum these protections. Kokoro is CPU/GPU-intensive, so an unauthenticated endpoint can be abused to burn your compute resources.
 
-**1. Set an API key.** Generate a strong random key and set `KOKORO_API_KEY` in your `env` file. All API requests must then include `Authorization: Bearer <key>`.
+**1. Use an API key.** Fresh installs with a mounted `/var/lib/kokoro` volume auto-generate an API key. Display it with `docker exec kokoro kokoro_manage --showkey`, or use `docker exec kokoro kokoro_manage --getkey` in scripts. Existing installs without a key remain open for backward compatibility; set `KOKORO_API_KEY` in your `env` file to enable authentication manually. All authenticated requests must include `Authorization: Bearer <key>`.
 
 ```bash
 # Generate a 32-byte random key
@@ -516,8 +516,6 @@ server {
     }
 }
 ```
-
-Set `KOKORO_API_KEY` in your `env` file when the server is accessible from the public internet.
 
 ## Update Docker image
 
