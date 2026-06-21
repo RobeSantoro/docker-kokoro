@@ -8,7 +8,7 @@ jobs:
     if: github.repository_owner == 'hwdsl2'
     strategy:
       matrix:
-        test_id: [no-env, with-env, with-key]
+        test_id: [no-env, with-env, with-key, empty-key, existing-no-key]
       fail-fast: false
     env:
       TEST_ID: ${{ matrix.test_id }}
@@ -33,6 +33,14 @@ jobs:
 
           docker build -t kokoro-test .
 
+          if [ "$TEST_ID" = "existing-no-key" ]; then
+            docker volume create kokoro-test-data
+            docker run --rm --entrypoint sh \
+              -v kokoro-test-data:/data \
+              kokoro-test \
+              -c 'printf "%s" "existing" > /data/.server_addr'
+          fi
+
           if [ "$TEST_ID" = "with-env" ]; then
             docker run \
               --name "$TEST_ID" \
@@ -56,6 +64,21 @@ jobs:
               -e KOKORO_API_KEY=test-kokoro-key \
               -p 8880:8880/tcp \
               -d kokoro-test
+          elif [ "$TEST_ID" = "empty-key" ]; then
+            docker run \
+              --name "$TEST_ID" \
+              --restart=always \
+              -v kokoro-test-data:/var/lib/kokoro \
+              -e KOKORO_API_KEY= \
+              -p 8880:8880/tcp \
+              -d kokoro-test
+          elif [ "$TEST_ID" = "existing-no-key" ]; then
+            docker run \
+              --name "$TEST_ID" \
+              --restart=always \
+              -v kokoro-test-data:/var/lib/kokoro \
+              -p 8880:8880/tcp \
+              -d kokoro-test
           fi
 
           # Wait for server to be ready (up to 300 seconds for model download)
@@ -70,21 +93,39 @@ jobs:
 
           docker ps | grep "$TEST_ID"
           docker logs "$TEST_ID"
+          if [ "$TEST_ID" = "existing-no-key" ]; then
+            docker logs "$TEST_ID" 2>&1 | grep -q 'Preserving no-auth behavior for backward compatibility'
+          fi
 
           # Verify health endpoint
           docker exec "$TEST_ID" curl -sf http://127.0.0.1:8880/health
 
           # Build optional auth header args
           kokoro_curl_args=()
-          [ "$TEST_ID" = "with-key" ] && kokoro_curl_args=(-H "Authorization: Bearer test-kokoro-key")
-
-          # Test auth enforcement when KOKORO_API_KEY is set
           if [ "$TEST_ID" = "with-key" ]; then
+            kokoro_curl_args=(-H "Authorization: Bearer test-kokoro-key")
+          elif [ "$TEST_ID" = "empty-key" ] || [ "$TEST_ID" = "existing-no-key" ]; then
+            kokoro_key=$(docker exec "$TEST_ID" kokoro_manage --getkey 2>/dev/null || true)
+            [ -z "$kokoro_key" ] || { echo "Expected no Kokoro API key, got $kokoro_key"; exit 1; }
+            docker exec "$TEST_ID" test ! -f /var/lib/kokoro/.api_key
+            docker exec "$TEST_ID" test ! -f /var/lib/kokoro/.auto_api_key_created
+          else
+            kokoro_key=$(docker exec "$TEST_ID" kokoro_manage --getkey)
+            [ -n "$kokoro_key" ] || { echo "Generated Kokoro API key not found"; exit 1; }
+            docker exec "$TEST_ID" test -f /var/lib/kokoro/.auto_api_key_created
+            kokoro_curl_args=(-H "Authorization: Bearer $kokoro_key")
+          fi
+
+          if [ "${#kokoro_curl_args[@]}" -gt 0 ]; then
+            # Test auth enforcement when KOKORO_API_KEY is set/generated
             http_code=$(curl -s -o /dev/null -w '%{http_code}' \
               http://127.0.0.1:8880/v1/audio/speech \
               -H "Content-Type: application/json" \
               -d '{"model":"tts-1","input":"Hi","voice":"af_heart"}' 2>/dev/null || true)
             [ "$http_code" = "401" ] || { echo "Expected 401 without key, got $http_code"; exit 1; }
+          else
+            # Explicit empty keys and existing no-key volumes preserve no-auth behavior.
+            curl -sf http://127.0.0.1:8880/v1/models | grep -q '"object"'
           fi
 
           # Verify models endpoint
