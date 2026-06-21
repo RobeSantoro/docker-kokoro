@@ -12,7 +12,7 @@
 
 - 相容 OpenAI 的 `POST /v1/audio/speech` 端點 —— 已使用 OpenAI TTS API 的應用只需修改一行即可切換
 - 54 種高品質語音，涵蓋 9 種語言（英語、日語、中文、西班牙語、法語、義大利語等）
-- 同時支援 OpenAI 語音名稱（`alloy`、`nova`、`echo` 等）和原生 Kokoro 語音 ID（`af_heart`、`bm_george` 等）
+- 支援映射到本地 Kokoro 語音的 OpenAI 語音名稱別名（`alloy`、`nova`、`echo` 等），以及原生 Kokoro 語音 ID（`af_heart`、`bm_george` 等）
 - 音訊保留在您的伺服器上 —— 不向第三方傳送資料
 - 支援所有主流輸出格式：`mp3`、`wav`、`flac`、`opus`、`aac`、`pcm`
 - 串流傳輸支援 —— 設定 `stream_format` 為 `"audio"` 或 `"sse"` 可在每句話合成完成後立即接收音訊，減少首次出聲的等待時間
@@ -249,7 +249,9 @@ volumes:
 
 ## API 參考
 
-該 API 與 [OpenAI 文字轉語音端點](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create)完全相容。任何已呼叫 `https://api.openai.com/v1/audio/speech` 的應用，只需設定以下環境變數即可切換到自架伺服器：
+該 API 與 [OpenAI 文字轉語音端點](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create)相容。任何已呼叫 `https://api.openai.com/v1/audio/speech` 的應用，只需設定以下環境變數即可切換到自架伺服器：
+
+為便於客戶端相容，OpenAI 語音名稱會作為本地別名接受。這些別名會映射到 Kokoro 語音，並不會重現 OpenAI 的專有語音。
 
 ```
 OPENAI_BASE_URL=http://您的伺服器IP:8880
@@ -268,7 +270,7 @@ Content-Type: application/json
 |---|---|---|---|
 | `model` | 字串 | ✅ | 傳入 `tts-1`、`tts-1-hd` 或 `kokoro`（均使用 Kokoro-82M）。 |
 | `input` | 字串 | ✅ | 要合成的文字。最多 4096 個字元。 |
-| `voice` | 字串 | ✅ | 使用的語音。參見[可用語音](#可用語音)。支援 Kokoro ID 或 OpenAI 別名。 |
+| `voice` | 字串 | ✅ | 使用的語音。參見[可用語音](#可用語音)。支援 Kokoro ID 或映射到本地 Kokoro 語音的 OpenAI 別名。 |
 | `response_format` | 字串 | — | 輸出格式。預設：`mp3`。選項：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。`pcm` 是 24 kHz、單聲道、無檔頭的原始有符號 16 位元小端音訊。 |
 | `speed` | 浮點數 | — | 語速。預設：`1.0`。範圍：`0.25`–`4.0`。 |
 | `instructions` | 字串 | — | 透過附加指令控制語音。為 API 相容性而接受，但 Kokoro 引擎目前不支援（將被忽略）。 |

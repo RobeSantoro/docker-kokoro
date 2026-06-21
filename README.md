@@ -12,7 +12,7 @@ Docker image to run a [Kokoro](https://github.com/hexgrad/kokoro) text-to-speech
 
 - OpenAI-compatible `POST /v1/audio/speech` endpoint — any app using the OpenAI TTS API switches with a one-line change
 - 54 high-quality voices across 9 languages (English, Japanese, Chinese, Spanish, French, Italian, and more)
-- Accepts both OpenAI voice names (`alloy`, `nova`, `echo`, ...) and native Kokoro voice IDs (`af_heart`, `bm_george`, ...)
+- Accepts OpenAI voice-name aliases (`alloy`, `nova`, `echo`, ...) that map to local Kokoro voices, plus native Kokoro voice IDs (`af_heart`, `bm_george`, ...)
 - Audio stays on your server — no data sent to third parties
 - All major output formats supported: `mp3`, `wav`, `flac`, `opus`, `aac`, `pcm`
 - Streaming support — set `stream_format` to `"audio"` or `"sse"` to receive audio as each sentence is synthesized, reducing time-to-first-audio
@@ -249,7 +249,9 @@ volumes:
 
 ## API reference
 
-The API is fully compatible with [OpenAI's text-to-speech endpoint](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create). Any application already calling `https://api.openai.com/v1/audio/speech` can switch to self-hosted by setting:
+The API is compatible with [OpenAI's text-to-speech endpoint](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create). Any application already calling `https://api.openai.com/v1/audio/speech` can switch to self-hosted by setting:
+
+OpenAI voice names are accepted as local aliases for client compatibility. These aliases map to Kokoro voices and do not reproduce OpenAI's proprietary voices.
 
 ```
 OPENAI_BASE_URL=http://your_server_ip:8880
@@ -268,7 +270,7 @@ Content-Type: application/json
 |---|---|---|---|
 | `model` | string | ✅ | Pass `tts-1`, `tts-1-hd`, or `kokoro` (all use Kokoro-82M). |
 | `input` | string | ✅ | The text to synthesize. Maximum 4096 characters. |
-| `voice` | string | ✅ | Voice to use. See [available voices](#available-voices). Accepts Kokoro IDs or OpenAI aliases. |
+| `voice` | string | ✅ | Voice to use. See [available voices](#available-voices). Accepts Kokoro IDs or OpenAI aliases that map to local Kokoro voices. |
 | `response_format` | string | — | Output format. Default: `mp3`. Options: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. `pcm` is raw signed 16-bit little-endian audio at 24 kHz mono, with no header. |
 | `speed` | float | — | Speech speed. Default: `1.0`. Range: `0.25`–`4.0`. |
 | `instructions` | string | — | Control the voice with additional instructions. Accepted for API compatibility but not currently supported by the Kokoro engine (ignored). |
