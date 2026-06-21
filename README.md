@@ -136,7 +136,7 @@ This Docker image uses the following variables, that can be declared in an `env`
 
 | Variable | Description | Default |
 |---|---|---|
-| `KOKORO_VOICE` | Default voice for synthesis. See [voices](#available-voices) for all options. Accepts Kokoro voice IDs (`af_heart`) or OpenAI aliases (`alloy`). | `af_heart` |
+| `KOKORO_VOICE` | Default voice for synthesis. See [voices](#available-voices) for all options. Accepts Kokoro voice IDs (`af_heart`) or OpenAI aliases (`alloy`, `ballad`, etc.). | `af_heart` |
 | `KOKORO_SPEED` | Default speech speed. Range: `0.25` (slowest) to `4.0` (fastest). | `1.0` |
 | `KOKORO_PORT` | HTTP port for the API (1–65535). | `8880` |
 | `KOKORO_LANG_CODE` | If set, loads only that language pipeline at startup (`a`=American English, `b`=British English, `e`=Spanish, `f`=French, `h`=Hindi, `i`=Italian, `j`=Japanese, `p`=Brazilian Portuguese, `z`=Mandarin Chinese). When unset, the pipeline is auto-selected from the `KOKORO_VOICE` prefix. Additional pipelines are created on demand when a request uses a different language. | *(not set)* |
@@ -251,7 +251,7 @@ volumes:
 
 The API is compatible with [OpenAI's text-to-speech endpoint](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create). Any application already calling `https://api.openai.com/v1/audio/speech` can switch to self-hosted by setting:
 
-OpenAI voice names are accepted as local aliases for client compatibility. These aliases map to Kokoro voices and do not reproduce OpenAI's proprietary voices.
+OpenAI voice names are accepted as local aliases for client compatibility. These aliases map to Kokoro voices and do not reproduce OpenAI's proprietary voices. The `voice` field may be a string or an object with an `id` field; unknown voices return `400`.
 
 ```
 OPENAI_BASE_URL=http://your_server_ip:8880
@@ -270,7 +270,7 @@ Content-Type: application/json
 |---|---|---|---|
 | `model` | string | ✅ | Pass `tts-1`, `tts-1-hd`, or `kokoro` (all use Kokoro-82M). |
 | `input` | string | ✅ | The text to synthesize. Maximum 4096 characters. |
-| `voice` | string | ✅ | Voice to use. See [available voices](#available-voices). Accepts Kokoro IDs or OpenAI aliases that map to local Kokoro voices. |
+| `voice` | string or object | ✅ | Voice to use. See [available voices](#available-voices). Accepts Kokoro IDs, OpenAI aliases that map to local Kokoro voices, or an object with an `id` field. Unknown voices return `400`. |
 | `response_format` | string | — | Output format. Default: `mp3`. Options: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. `pcm` is raw signed 16-bit little-endian audio at 24 kHz mono, with no header. |
 | `speed` | float | — | Speech speed. Default: `1.0`. Range: `0.25`–`4.0`. |
 | `instructions` | string | — | Control the voice with additional instructions. Accepted for API compatibility but not currently supported by the Kokoro engine (ignored). |
@@ -413,6 +413,9 @@ docker exec kokoro kokoro_manage --listvoices
 | `coral` | `af_heart` |
 | `sage` | `af_sky` |
 | `verse` | `bm_george` |
+| `ballad` | `bm_lewis` |
+| `marin` | `af_nicole` |
+| `cedar` | `am_adam` |
 
 > **Tip:** The server automatically selects the correct language pipeline from the voice ID prefix — no configuration needed. For example, `jf_alpha` loads the Japanese pipeline, `bf_emma` loads British English. Additional language pipelines are created on demand when needed.
 

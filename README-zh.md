@@ -136,7 +136,7 @@ docker image tag quay.io/hwdsl2/kokoro-server hwdsl2/kokoro-server
 
 | 变量 | 说明 | 默认值 |
 |---|---|---|
-| `KOKORO_VOICE` | 合成语音的默认音色。参见[可用语音](#可用语音)了解所有选项。支持 Kokoro 语音 ID（`af_heart`）或 OpenAI 别名（`alloy`）。 | `af_heart` |
+| `KOKORO_VOICE` | 合成语音的默认音色。参见[可用语音](#可用语音)了解所有选项。支持 Kokoro 语音 ID（`af_heart`）或 OpenAI 别名（`alloy`、`ballad` 等）。 | `af_heart` |
 | `KOKORO_SPEED` | 默认语速。范围：`0.25`（最慢）到 `4.0`（最快）。 | `1.0` |
 | `KOKORO_PORT` | API 的 HTTP 端口（1–65535）。 | `8880` |
 | `KOKORO_LANG_CODE` | 若已设置，则在启动时仅加载该语言的语音处理管线（`a`=美式英语，`b`=英式英语，`e`=西班牙语，`f`=法语，`h`=印地语，`i`=意大利语，`j`=日语，`p`=巴西葡萄牙语，`z`=普通话）。未设置时，根据 `KOKORO_VOICE` 前缀自动选择语音处理管线。当请求使用其他语言时，会按需创建对应的语音处理管线。 | *(未设置)* |
@@ -251,7 +251,7 @@ volumes:
 
 该 API 与 [OpenAI 文字转语音接口](https://developers.openai.com/api/reference/resources/audio/subresources/speech/methods/create)兼容。任何已调用 `https://api.openai.com/v1/audio/speech` 的应用，只需设置以下环境变量即可切换到自托管：
 
-为便于客户端兼容，OpenAI 语音名称会作为本地别名接受。这些别名会映射到 Kokoro 语音，并不会复现 OpenAI 的专有语音。
+为便于客户端兼容，OpenAI 语音名称会作为本地别名接受。这些别名会映射到 Kokoro 语音，并不会复现 OpenAI 的专有语音。`voice` 字段可以是字符串，也可以是带有 `id` 字段的对象；未知语音会返回 `400`。
 
 ```
 OPENAI_BASE_URL=http://您的服务器IP:8880
@@ -270,7 +270,7 @@ Content-Type: application/json
 |---|---|---|---|
 | `model` | 字符串 | ✅ | 传入 `tts-1`、`tts-1-hd` 或 `kokoro`（均使用 Kokoro-82M）。 |
 | `input` | 字符串 | ✅ | 要合成的文本。最多 4096 个字符。 |
-| `voice` | 字符串 | ✅ | 使用的语音。参见[可用语音](#可用语音)。支持 Kokoro ID 或映射到本地 Kokoro 语音的 OpenAI 别名。 |
+| `voice` | 字符串或对象 | ✅ | 使用的语音。参见[可用语音](#可用语音)。支持 Kokoro ID、映射到本地 Kokoro 语音的 OpenAI 别名，或带有 `id` 字段的对象。未知语音会返回 `400`。 |
 | `response_format` | 字符串 | — | 输出格式。默认：`mp3`。选项：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。`pcm` 是 24 kHz、单声道、无文件头的原始有符号 16 位小端音频。 |
 | `speed` | 浮点数 | — | 语速。默认：`1.0`。范围：`0.25`–`4.0`。 |
 | `instructions` | 字符串 | — | 通过附加指令控制语音。为 API 兼容性而接受，但 Kokoro 引擎当前不支持（将被忽略）。 |
@@ -398,6 +398,8 @@ docker exec kokoro kokoro_manage --listvoices
 **意大利语：** `if_sara`、`im_nicola`
 
 **巴西葡萄牙语：** `pf_dora`、`pm_alex`、`pm_santa`
+
+**OpenAI 语音别名：** `alloy`、`echo`、`fable`、`onyx`、`nova`、`shimmer`、`ash`、`coral`、`sage`、`verse`、`ballad`、`marin`、`cedar`（会映射到本地 Kokoro 语音）。
 
 > **提示：** 服务器会根据语音 ID 前缀自动选择对应的语言处理管线，无需任何配置。例如，`jf_alpha` 会加载日语管线，`bf_emma` 会加载英式英语管线。其他语言的管线会在需要时按需创建。
 
