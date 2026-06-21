@@ -307,16 +307,28 @@ _FFMPEG_OUTPUT_ARGS = {
 }
 
 
+def _audio_to_pcm16le(samples: np.ndarray) -> bytes:
+    """
+    Convert float audio samples to raw signed 16-bit little-endian PCM.
+
+    Kokoro returns float samples in approximately [-1, 1]. OpenAI-compatible
+    response_format="pcm" is raw PCM_S16LE at 24 kHz mono, without a header.
+    """
+    pcm = np.asarray(samples, dtype=np.float32)
+    pcm = (pcm * 32767.0).clip(-32768, 32767).astype("<i2", copy=False)
+    return pcm.tobytes()
+
+
 def _audio_to_bytes(samples: np.ndarray, sample_rate: int, fmt: str) -> bytes:
     """
     Convert a float32 numpy audio array to the requested output format bytes.
 
     - wav / flac: written directly via soundfile (no extra processes)
-    - pcm: raw little-endian float32 bytes
+    - pcm: raw signed 16-bit little-endian samples, no header
     - mp3 / aac / opus: written as wav then transcoded via ffmpeg subprocess
     """
     if fmt == "pcm":
-        return samples.astype(np.float32).tobytes()
+        return _audio_to_pcm16le(samples)
 
     if fmt not in _FFMPEG_OUTPUT_ARGS:
         # wav / flac — written directly by soundfile
@@ -410,7 +422,7 @@ async def _stream_audio(
 
     Format notes
     ------------
-    pcm   — raw little-endian float32 samples; no container overhead.
+    pcm   — raw signed 16-bit little-endian samples; no container overhead.
     wav   — a streaming WAV header (RIFF sizes = 0xFFFFFFFF) is emitted first,
             followed by signed 16-bit little-endian PCM sample data.
     mp3   — each chunk is encoded independently via ffmpeg and yielded; mp3
@@ -462,11 +474,9 @@ async def _stream_audio(
             item = (item * volume).clip(-1.0, 1.0)
 
         if fmt == "pcm":
-            yield item.astype(np.float32).tobytes()
+            yield _audio_to_pcm16le(item)
         elif fmt == "wav":
-            # Convert float32 [-1, 1] → signed int16, emit raw PCM samples
-            s16 = (item * 32767.0).clip(-32768, 32767).astype(np.int16)
-            yield s16.tobytes()
+            yield _audio_to_pcm16le(item)
         else:
             # mp3 / aac / opus / flac — encode via ffmpeg and yield
             try:
