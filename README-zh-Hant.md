@@ -269,7 +269,7 @@ Content-Type: application/json
 | `model` | 字串 | ✅ | 傳入 `tts-1`、`tts-1-hd` 或 `kokoro`（均使用 Kokoro-82M）。 |
 | `input` | 字串 | ✅ | 要合成的文字。最多 4096 個字元。 |
 | `voice` | 字串 | ✅ | 使用的語音。參見[可用語音](#可用語音)。支援 Kokoro ID 或 OpenAI 別名。 |
-| `response_format` | 字串 | — | 輸出格式。預設：`mp3`。選項：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。 |
+| `response_format` | 字串 | — | 輸出格式。預設：`mp3`。選項：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。`pcm` 是 24 kHz、單聲道、無檔頭的原始有符號 16 位元小端音訊。 |
 | `speed` | 浮點數 | — | 語速。預設：`1.0`。範圍：`0.25`–`4.0`。 |
 | `instructions` | 字串 | — | 透過附加指令控制語音。為 API 相容性而接受，但 Kokoro 引擎目前不支援（將被忽略）。 |
 | `stream_format` | 字串 | — | 音訊串流傳輸格式。選項：`audio`、`sse`。設為 `audio` 時，音訊位元組透過分塊傳輸編碼傳送。設為 `sse` 時，回應使用 Server-Sent Events，包含 `speech.audio.delta` 和 `speech.audio.done` 事件（OpenAI 串流語音協定）。省略時傳回完整音訊。 |

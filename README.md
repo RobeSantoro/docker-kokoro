@@ -269,7 +269,7 @@ Content-Type: application/json
 | `model` | string | ✅ | Pass `tts-1`, `tts-1-hd`, or `kokoro` (all use Kokoro-82M). |
 | `input` | string | ✅ | The text to synthesize. Maximum 4096 characters. |
 | `voice` | string | ✅ | Voice to use. See [available voices](#available-voices). Accepts Kokoro IDs or OpenAI aliases. |
-| `response_format` | string | — | Output format. Default: `mp3`. Options: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. |
+| `response_format` | string | — | Output format. Default: `mp3`. Options: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. `pcm` is raw signed 16-bit little-endian audio at 24 kHz mono, with no header. |
 | `speed` | float | — | Speech speed. Default: `1.0`. Range: `0.25`–`4.0`. |
 | `instructions` | string | — | Control the voice with additional instructions. Accepted for API compatibility but not currently supported by the Kokoro engine (ignored). |
 | `stream_format` | string | — | The format to stream the audio in. Options: `audio`, `sse`. When set to `audio`, audio bytes are streamed via chunked transfer encoding. When set to `sse`, the response uses Server-Sent Events with `speech.audio.delta` and `speech.audio.done` events (OpenAI streaming speech protocol). If omitted, the full audio is returned as a single response. |
