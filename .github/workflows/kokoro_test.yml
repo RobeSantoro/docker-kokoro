@@ -29,7 +29,7 @@ jobs:
             -e '/KOKORO_VOICE=/s/# //' \
             kokoro.env.example
 
-          set -x
+          set -ex
 
           docker build -t kokoro-test .
 
@@ -133,6 +133,39 @@ jobs:
             "${kokoro_curl_args[@]}" \
             | grep -q '"object"'
 
+          check_pcm16le_matches_wav() {
+            local pcm_path="$1"
+            local wav_path="$2"
+            python3 - "$pcm_path" "$wav_path" <<'PY'
+          import pathlib
+          import sys
+          import wave
+
+          pcm_path = pathlib.Path(sys.argv[1])
+          wav_path = pathlib.Path(sys.argv[2])
+          pcm = pcm_path.read_bytes()
+          if not pcm:
+              raise SystemExit(f"{pcm_path} is empty")
+          if len(pcm) % 2:
+              raise SystemExit(f"{pcm_path} length is not aligned to 16-bit samples: {len(pcm)}")
+
+          with wave.open(str(wav_path), "rb") as wav:
+              if wav.getnchannels() != 1:
+                  raise SystemExit(f"{wav_path} is not mono: {wav.getnchannels()} channels")
+              if wav.getframerate() != 24000:
+                  raise SystemExit(f"{wav_path} sample rate is not 24000 Hz: {wav.getframerate()}")
+              if wav.getsampwidth() != 2:
+                  raise SystemExit(f"{wav_path} sample width is not 16-bit: {wav.getsampwidth()} bytes")
+              expected_bytes = wav.getnframes() * wav.getnchannels() * wav.getsampwidth()
+
+          if len(pcm) != expected_bytes:
+              raise SystemExit(
+                  f"{pcm_path} has {len(pcm)} bytes; expected {expected_bytes} bytes "
+                  f"for raw PCM_S16LE matching {wav_path}"
+              )
+          PY
+          }
+
           # Test kokoro_manage commands
           docker exec "$TEST_ID" kokoro_manage --showinfo
           docker exec "$TEST_ID" kokoro_manage --listvoices
@@ -152,6 +185,14 @@ jobs:
             -d '{"model":"tts-1","input":"Hello world","voice":"af_heart","response_format":"wav"}' \
             -o /tmp/test_speech.wav \
             && [ -s /tmp/test_speech.wav ]
+
+          # Test speech endpoint (pcm format — verifies raw PCM_S16LE path)
+          curl -sf http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world","voice":"af_heart","response_format":"pcm"}' \
+            -o /tmp/test_speech.pcm \
+            && check_pcm16le_matches_wav /tmp/test_speech.pcm /tmp/test_speech.wav
 
           # Test speech endpoint (flac format)
           curl -sf http://127.0.0.1:8880/v1/audio/speech \
@@ -175,7 +216,7 @@ jobs:
             "${kokoro_curl_args[@]}" \
             -d '{"model":"tts-1","input":"Hello world","voice":"af_heart","response_format":"pcm","stream_format":"audio"}' \
             -o /tmp/test_speech_stream.pcm \
-            && [ -s /tmp/test_speech_stream.pcm ]
+            && check_pcm16le_matches_wav /tmp/test_speech_stream.pcm /tmp/test_speech.wav
 
           # Test SSE streaming endpoint (verifies stream_format="sse" path)
           curl -sf http://127.0.0.1:8880/v1/audio/speech \
@@ -185,6 +226,42 @@ jobs:
             -o /tmp/test_speech_sse.txt \
             && grep -q "speech.audio.delta" /tmp/test_speech_sse.txt \
             && grep -q "speech.audio.done" /tmp/test_speech_sse.txt
+
+          # Test SSE streaming endpoint (pcm format — verifies SSE PCM_S16LE path)
+          curl -sf http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world","voice":"af_heart","response_format":"pcm","stream_format":"sse"}' \
+            -o /tmp/test_speech_sse_pcm.txt \
+            && python3 - /tmp/test_speech_sse_pcm.txt /tmp/test_speech_sse.pcm <<'PY'
+          import base64
+          import json
+          import pathlib
+          import sys
+
+          sse_path = pathlib.Path(sys.argv[1])
+          pcm_path = pathlib.Path(sys.argv[2])
+          chunks = []
+          seen_done = False
+          for line in sse_path.read_text().splitlines():
+              if not line.startswith("data: "):
+                  continue
+              data = line[len("data: "):]
+              if data == "[DONE]":
+                  seen_done = True
+                  continue
+              event = json.loads(data)
+              if event.get("type") == "speech.audio.delta":
+                  chunks.append(base64.b64decode(event["audio"]))
+              elif event.get("type") == "speech.audio.done":
+                  seen_done = True
+          if not chunks:
+              raise SystemExit("No speech.audio.delta chunks found in SSE PCM response")
+          if not seen_done:
+              raise SystemExit("No done marker found in SSE PCM response")
+          pcm_path.write_bytes(b"".join(chunks))
+          PY
+          check_pcm16le_matches_wav /tmp/test_speech_sse.pcm /tmp/test_speech.wav
 
           # Test required fields enforcement (missing voice should return 422)
           http_code=$(curl -s -o /dev/null -w '%{http_code}' \
