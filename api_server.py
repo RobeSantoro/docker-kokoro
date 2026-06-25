@@ -425,6 +425,15 @@ def _wav_streaming_header(sample_rate: int, channels: int = 1) -> bytes:
     )
 
 
+def _sse_audio_delta(audio_bytes: bytes) -> str:
+    """Build one OpenAI-style SSE audio delta frame."""
+    payload = json.dumps({
+        "type": "speech.audio.delta",
+        "audio": base64.b64encode(audio_bytes).decode("ascii"),
+    })
+    return f"data: {payload}\n\n"
+
+
 # ---------------------------------------------------------------------------
 # SSE-style streaming helper for TTS
 # ---------------------------------------------------------------------------
@@ -528,6 +537,9 @@ async def _stream_audio_sse(
       - speech.audio.delta  — base64-encoded audio chunk
       - speech.audio.done   — synthesis complete
 
+    For response_format="wav", the first delta is a 44-byte streaming WAV
+    header, followed by raw signed 16-bit little-endian PCM audio deltas.
+
     The stream is terminated with a `data: [DONE]` sentinel, matching the
     OpenAI SDK expectations.
     """
@@ -547,6 +559,9 @@ async def _stream_audio_sse(
                 loop.call_soon_threadsafe(chunk_queue.put_nowait, None)  # sentinel
 
     loop.run_in_executor(None, _run)
+
+    if fmt == "wav":
+        yield _sse_audio_delta(_wav_streaming_header(sample_rate=24000))
 
     while True:
         item = await chunk_queue.get()
@@ -576,17 +591,15 @@ async def _stream_audio_sse(
 
         # Encode audio chunk to the requested format
         try:
-            audio_bytes = _audio_to_bytes(item, 24000, fmt)
+            if fmt == "pcm" or fmt == "wav":
+                audio_bytes = _audio_to_pcm16le(item)
+            else:
+                audio_bytes = _audio_to_bytes(item, 24000, fmt)
         except Exception as exc:
             logger.error("SSE chunk encoding to %s failed: %s", fmt, exc)
             return
 
-        # Emit speech.audio.delta event with base64-encoded audio
-        payload = json.dumps({
-            "type": "speech.audio.delta",
-            "audio": base64.b64encode(audio_bytes).decode("ascii"),
-        })
-        yield f"data: {payload}\n\n"
+        yield _sse_audio_delta(audio_bytes)
 
     # Emit speech.audio.done event
     yield f'data: {json.dumps({"type": "speech.audio.done"})}\n\n'
