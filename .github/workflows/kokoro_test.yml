@@ -261,9 +261,66 @@ jobs:
               raise SystemExit("No speech.audio.delta chunks found in SSE PCM response")
           if not seen_done:
               raise SystemExit("No done marker found in SSE PCM response")
+          for idx, chunk in enumerate(chunks, start=1):
+              if chunk.startswith(b"RIFF") and chunk[8:12] == b"WAVE":
+                  raise SystemExit(f"SSE PCM delta #{idx} unexpectedly contains a WAV header")
           pcm_path.write_bytes(b"".join(chunks))
           PY
           check_pcm16le_matches_wav /tmp/test_speech_sse.pcm /tmp/test_speech.wav
+
+          # Test SSE streaming endpoint (wav format — verifies header once, then PCM)
+          curl -sf http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            "${kokoro_curl_args[@]}" \
+            -d '{"model":"tts-1","input":"Hello world. This is a second sentence.","voice":"af_heart","response_format":"wav","stream_format":"sse"}' \
+            -o /tmp/test_speech_sse_wav.txt \
+            && python3 - /tmp/test_speech_sse_wav.txt /tmp/test_speech_sse.wav <<'PY'
+          import base64
+          import json
+          import pathlib
+          import struct
+          import sys
+
+          sse_path = pathlib.Path(sys.argv[1])
+          wav_path = pathlib.Path(sys.argv[2])
+          chunks = []
+          seen_done = False
+          for line in sse_path.read_text().splitlines():
+              if not line.startswith("data: "):
+                  continue
+              data = line[len("data: "):]
+              if data == "[DONE]":
+                  seen_done = True
+                  continue
+              event = json.loads(data)
+              if event.get("type") == "speech.audio.delta":
+                  chunks.append(base64.b64decode(event["audio"]))
+              elif event.get("type") == "speech.audio.done":
+                  seen_done = True
+          if len(chunks) < 2:
+              raise SystemExit(f"Expected WAV header plus audio deltas, got {len(chunks)} delta(s)")
+          if not seen_done:
+              raise SystemExit("No done marker found in SSE WAV response")
+          header = chunks[0]
+          expected_header = struct.pack(
+              "<4sI4s4sIHHIIHH4sI",
+              b"RIFF", 0xFFFFFFFF, b"WAVE",
+              b"fmt ", 16,
+              1, 1, 24000, 48000, 2, 16,
+              b"data", 0xFFFFFFFF,
+          )
+          if header != expected_header:
+              raise SystemExit("First SSE WAV delta is not the exact 24 kHz mono streaming WAV header")
+          for idx, chunk in enumerate(chunks[1:], start=2):
+              if chunk.startswith(b"RIFF") and chunk[8:12] == b"WAVE":
+                  raise SystemExit(f"SSE WAV delta #{idx} unexpectedly contains another WAV header")
+          wav_bytes = b"".join(chunks)
+          if len(wav_bytes) <= 44:
+              raise SystemExit("SSE WAV payload contains no PCM bytes after the header")
+          if (len(wav_bytes) - 44) % 2:
+              raise SystemExit("SSE WAV PCM payload is not aligned to 16-bit samples")
+          wav_path.write_bytes(wav_bytes)
+          PY
 
           # Test required fields enforcement (missing voice should return 422)
           http_code=$(curl -s -o /dev/null -w '%{http_code}' \

@@ -110,5 +110,20 @@ class VoiceValidationTests(unittest.TestCase):
         self.assertEqual(missing, [])
 
 
+class AudioFormatTests(unittest.TestCase):
+    def test_wav_streaming_header_shape(self):
+        header = api_server._wav_streaming_header(sample_rate=24000)
+        self.assertEqual(len(header), 44)
+        self.assertEqual(header[0:4], b"RIFF")
+        self.assertEqual(header[8:12], b"WAVE")
+        self.assertEqual(header[12:16], b"fmt ")
+        self.assertEqual(header[36:40], b"data")
+
+    def test_wav_streaming_header_uses_unknown_sizes(self):
+        header = api_server._wav_streaming_header(sample_rate=24000)
+        self.assertEqual(int.from_bytes(header[4:8], "little"), 0xFFFFFFFF)
+        self.assertEqual(int.from_bytes(header[40:44], "little"), 0xFFFFFFFF)
+
+
 if __name__ == "__main__":
     unittest.main()
