@@ -274,7 +274,7 @@ Content-Type: application/json
 | `response_format` | 字符串 | — | 输出格式。默认：`mp3`。选项：`mp3`、`opus`、`aac`、`flac`、`wav`、`pcm`。`pcm` 是 24 kHz、单声道、无文件头的原始有符号 16 位小端音频。 |
 | `speed` | 浮点数 | — | 语速。默认：`1.0`。范围：`0.25`–`4.0`。 |
 | `instructions` | 字符串 | — | 通过附加指令控制语音。为 API 兼容性而接受，但 Kokoro 引擎当前不支持（将被忽略）。 |
-| `stream_format` | 字符串 | — | 音频流式传输格式。选项：`audio`、`sse`。设为 `audio` 时，音频字节通过分块传输编码传送。设为 `sse` 时，响应使用 Server-Sent Events，包含 `speech.audio.delta` 和 `speech.audio.done` 事件（OpenAI 流式语音协议）。省略时返回完整音频。 |
+| `stream_format` | 字符串 | — | 音频流式传输格式。选项：`audio`、`sse`。设为 `audio` 时，音频字节通过分块传输编码传送。设为 `sse` 时，响应使用 Server-Sent Events，包含 `speech.audio.delta` 和 `speech.audio.done` 事件（OpenAI 流式语音协议）。SSE WAV 的第一个 delta 是流式 WAV 头，后续 delta 为 24 kHz 单声道原始 PCM_S16LE；SSE PCM delta 为 24 kHz 单声道、无文件头的原始 PCM_S16LE。省略时返回完整音频。 |
 | `volume_multiplier` | 浮点数 | — | 输出音量倍数。默认：`1.0`。范围：`0.1`–`2.0`。大于 `1.0` 时增大音量，小于 `1.0` 时减小音量。缩放后样本将被截断以防止失真。 |
 
 **示例：**

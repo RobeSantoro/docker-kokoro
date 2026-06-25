@@ -274,7 +274,7 @@ Content-Type: application/json
 | `response_format` | string | — | Output format. Default: `mp3`. Options: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`. `pcm` is raw signed 16-bit little-endian audio at 24 kHz mono, with no header. |
 | `speed` | float | — | Speech speed. Default: `1.0`. Range: `0.25`–`4.0`. |
 | `instructions` | string | — | Control the voice with additional instructions. Accepted for API compatibility but not currently supported by the Kokoro engine (ignored). |
-| `stream_format` | string | — | The format to stream the audio in. Options: `audio`, `sse`. When set to `audio`, audio bytes are streamed via chunked transfer encoding. When set to `sse`, the response uses Server-Sent Events with `speech.audio.delta` and `speech.audio.done` events (OpenAI streaming speech protocol). If omitted, the full audio is returned as a single response. |
+| `stream_format` | string | — | The format to stream the audio in. Options: `audio`, `sse`. When set to `audio`, audio bytes are streamed via chunked transfer encoding. When set to `sse`, the response uses Server-Sent Events with `speech.audio.delta` and `speech.audio.done` events (OpenAI streaming speech protocol). For SSE WAV, the first delta is a streaming WAV header and later deltas are raw PCM_S16LE at 24 kHz mono. SSE PCM deltas are raw PCM_S16LE at 24 kHz mono with no header. If omitted, the full audio is returned as a single response. |
 | `volume_multiplier` | float | — | Output volume multiplier. Default: `1.0`. Range: `0.1`–`2.0`. Values above `1.0` amplify, below `1.0` attenuate. Samples are clipped after scaling to prevent distortion. |
 
 **Example:**
