@@ -10,6 +10,9 @@ on:
       - '.github/workflows/kokoro_test.yml'
       - '.github/workflows/tests/**'
 
+permissions:
+  contents: read
+
 jobs:
   shellcheck:
     if: github.repository_owner == 'hwdsl2'
