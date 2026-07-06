@@ -1,0 +1,71 @@
+name: cuda_test
+
+on: workflow_call
+
+permissions:
+  contents: read
+
+jobs:
+  cuda_test:
+    runs-on: ubuntu-24.04
+    if: github.repository_owner == 'hwdsl2'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test CUDA image boot without GPU
+        run: |
+          [ ! -x /usr/bin/docker ] && exit 1
+
+          cd "$GITHUB_WORKSPACE"
+          pwd
+
+          set -x
+
+          docker build -f Dockerfile.cuda -t kokoro-cuda-test .
+
+          docker run \
+            --name kokoro-cuda-runtime-test \
+            --restart=always \
+            -v kokoro-cuda-runtime-test-data:/var/lib/kokoro \
+            -e KOKORO_API_KEY=test-kokoro-cuda-key \
+            -p 8880:8880/tcp \
+            -d kokoro-cuda-test
+
+          # Wait for server to be ready (up to 300 seconds for model download)
+          i=0
+          while [ "$i" -lt 300 ]; do
+            if docker exec kokoro-cuda-runtime-test curl -sf http://127.0.0.1:8880/health >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+            i=$((i + 1))
+          done
+
+          docker ps | grep kokoro-cuda-runtime-test
+          docker logs kokoro-cuda-runtime-test
+
+          # Verify health, auth enforcement, and the OpenAI-compatible models endpoint.
+          docker exec kokoro-cuda-runtime-test curl -sf http://127.0.0.1:8880/health
+
+          http_code=$(curl -s -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8880/v1/audio/speech \
+            -H "Content-Type: application/json" \
+            -d '{"model":"tts-1","input":"Hi","voice":"af_heart"}' 2>/dev/null || true)
+          [ "$http_code" = "401" ] || { echo "Expected 401 without key, got $http_code"; exit 1; }
+
+          curl -sf http://127.0.0.1:8880/v1/models \
+            -H "Authorization: Bearer test-kokoro-cuda-key" \
+            | grep -q '"object"'
+
+          docker exec kokoro-cuda-runtime-test kokoro_manage --showinfo
+          docker exec kokoro-cuda-runtime-test kokoro_manage --listvoices
+          docker exec kokoro-cuda-runtime-test python3 -c 'import torch; print(torch.version.cuda or "no cuda version")'
+
+          exit 0
+      - name: Clear
+        if: always()
+        run: |
+          docker rm -f kokoro-cuda-runtime-test || true
+          docker volume rm kokoro-cuda-runtime-test-data || true
+          docker rmi kokoro-cuda-test || true
