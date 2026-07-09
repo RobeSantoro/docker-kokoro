@@ -150,6 +150,7 @@ docker image tag quay.io/hwdsl2/kokoro-server hwdsl2/kokoro-server
 | `KOKORO_API_KEY` | 選填的 Bearer 權杖。新持久化安裝會自動產生。設定後所有 API 請求須包含 `Authorization: Bearer <key>`。明確設定為空可停用驗證。 | 新持久化安裝自動產生 |
 | `KOKORO_LOG_LEVEL` | 日誌等級：`DEBUG`、`INFO`、`WARNING`、`ERROR`、`CRITICAL`。 | `INFO` |
 | `KOKORO_LOCAL_ONLY` | 設定為任意非空值（例如 `true`）時，停用所有 HuggingFace 模型下載。適用於離線或氣隙部署（需預快取模型）。 | *(未設定)* |
+| `KOKORO_DISABLE_USAGE_COUNTS` | 設為 `1` 可停用匿名彙總使用計數。 | *(未設定)* |
 
 **注：** 在 `env` 檔案中，值可以用單引號括起來，例如 `VAR='value'`。`=` 兩側不要有空格。如果變更了 `KOKORO_PORT`，請相應更新 `docker run` 指令中的 `-p` 參數。
 
@@ -541,6 +542,10 @@ docker rm -f kokoro
 Kokoro 可作為更廣泛的自託管 AI 設定中的文字轉語音服務。
 
 如需完整和輕量級 Docker Compose 技術堆疊、手動 `docker run` 範例，以及結合 Kokoro、Embeddings、LiteLLM、Ollama、Docling 和 MCP Gateway 的語音/RAG/MCP 流水線範例，請參閱 [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack/blob/main/README-zh-Hant.md)。
+
+## 使用計數
+
+此映像使用公開的 GitHub Release 資源下載次數進行匿名彙總使用計數。計數是近似值，不代表唯一使用者或活躍安裝。映像不會傳送遙測負載，也不會使用私有收集器。僅當伺服器成功啟動且掛載了 `/var/lib/kokoro` 卷後，才會以盡力而為方式計數；當該持久化安裝首次執行不同映像建置時，也會再次計數。若要退出，請設定 `KOKORO_DISABLE_USAGE_COUNTS=1`。
 
 ## 技術細節
 

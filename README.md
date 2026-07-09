@@ -150,6 +150,7 @@ This Docker image uses the following variables, that can be declared in an `env`
 | `KOKORO_API_KEY` | Optional Bearer token. Fresh persistent installs auto-generate one. If set, all API requests must include `Authorization: Bearer <key>`. Set explicitly empty to disable authentication. | Auto-generated for fresh persistent installs |
 | `KOKORO_LOG_LEVEL` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. | `INFO` |
 | `KOKORO_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables all HuggingFace model downloads. For offline or air-gapped deployments with pre-cached model. | *(not set)* |
+| `KOKORO_DISABLE_USAGE_COUNTS` | Set to `1` to disable anonymous aggregate usage counts. | *(not set)* |
 
 **Note:** In your `env` file, you may enclose values in single quotes, e.g. `VAR='value'`. Do not add spaces around `=`. If you change `KOKORO_PORT`, update the `-p` flag in the `docker run` command accordingly.
 
@@ -557,6 +558,10 @@ Your downloaded model is preserved in the `kokoro-data` volume.
 Kokoro can be used as the text-to-speech service in a broader self-hosted AI setup.
 
 For full and lightweight Docker Compose stacks, manual `docker run` examples, and voice/RAG/MCP pipeline examples with Kokoro, Embeddings, LiteLLM, Ollama, Docling, and MCP Gateway, see [Self-Hosted AI Stack](https://github.com/hwdsl2/self-hosted-ai-stack).
+
+## Usage counts
+
+This image uses public GitHub release asset download counts for anonymous, aggregate usage counts. Counts are approximate and are not unique users or active installs. The image does not send a telemetry payload or use a private collector. It only attempts the best-effort count after the server starts successfully with a mounted `/var/lib/kokoro` volume, and again when that persistent install first runs a different image build. To opt out, set `KOKORO_DISABLE_USAGE_COUNTS=1`.
 
 ## Technical details
 
