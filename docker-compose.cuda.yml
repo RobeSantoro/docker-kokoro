@@ -3,18 +3,17 @@ services:
     image: hwdsl2/kokoro-server:cuda
     container_name: kokoro
     restart: always
+    # Docker Desktop for Linux runs in a VM without NVIDIA GPU passthrough.
+    # Start this compose file on the native Docker Engine (`--context default`).
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "${NVIDIA_VISIBLE_DEVICES:-0}"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
     ports:
-      - "8880:8880/tcp"  # For a host-based reverse proxy, change to "127.0.0.1:8880:8880/tcp"
+      - "127.0.0.1:8880:8880/tcp"
     volumes:
       - kokoro-data:/var/lib/kokoro
       - ./kokoro.env:/kokoro.env:ro
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
 volumes:
   kokoro-data:
