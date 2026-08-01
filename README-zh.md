@@ -18,7 +18,7 @@
 - 流式传输支持 —— 设置 `stream_format` 为 `"audio"` 或 `"sse"` 可在每句话合成完成后立即接收音频，减少首次出声的等待时间
 - NVIDIA GPU（CUDA）加速推理（`:cuda` 镜像标签）
 - 离线/气隙模式 —— 使用预缓存模型无需访问互联网（`KOKORO_LOCAL_ONLY`）
-- 通过 [GitHub Actions](https://github.com/hwdsl2/docker-kokoro/actions/workflows/main.yml) 自动构建和发布
+- 通过 [GitHub Actions](https://github.com/hwdsl2/docker-kokoro/actions) 自动构建和发布
 - 通过 Docker 数据卷持久化模型缓存
 - 多架构：`linux/amd64`、`linux/arm64`
 

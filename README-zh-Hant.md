@@ -18,7 +18,7 @@
 - 串流傳輸支援 —— 設定 `stream_format` 為 `"audio"` 或 `"sse"` 可在每句話合成完成後立即接收音訊，減少首次出聲的等待時間
 - NVIDIA GPU（CUDA）加速推理（`:cuda` 映像標籤）
 - 離線/氣隙模式 —— 使用預快取模型無需存取網際網路（`KOKORO_LOCAL_ONLY`）
-- 透過 [GitHub Actions](https://github.com/hwdsl2/docker-kokoro/actions/workflows/main.yml) 自動建置和發佈
+- 透過 [GitHub Actions](https://github.com/hwdsl2/docker-kokoro/actions) 自動建置和發佈
 - 透過 Docker 資料捲持久化模型快取
 - 多架構：`linux/amd64`、`linux/arm64`
 
