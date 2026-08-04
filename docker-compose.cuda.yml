@@ -9,6 +9,7 @@ services:
     environment:
       NVIDIA_VISIBLE_DEVICES: "${NVIDIA_VISIBLE_DEVICES:-0}"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      KOKORO_DISABLE_USAGE_COUNTS: "1"
     ports:
       - "127.0.0.1:8880:8880/tcp"
     volumes:
