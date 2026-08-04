@@ -11,7 +11,7 @@ Docker image to run a [Kokoro](https://github.com/hexgrad/kokoro) text-to-speech
 **Features:**
 
 - OpenAI-compatible `POST /v1/audio/speech` endpoint — any app using the OpenAI TTS API switches with a one-line change
-- 54 high-quality voices across 9 languages (English, Japanese, Chinese, Spanish, French, Italian, and more)
+- 55 voices across English, German, Japanese, Chinese, Spanish, French, Italian, and more
 - Accepts OpenAI voice-name aliases (`alloy`, `nova`, `echo`, ...) that map to local Kokoro voices, plus native Kokoro voice IDs (`af_heart`, `bm_george`, ...)
 - Audio stays on your server — no data sent to third parties
 - All major output formats supported: `mp3`, `wav`, `flac`, `opus`, `aac`, `pcm`
@@ -81,7 +81,7 @@ docker run \
 
 **Note:** For internet-facing deployments, using a [reverse proxy](#using-a-reverse-proxy) to add HTTPS is **strongly recommended**. In that case, also replace `-p 8880:8880` with `-p 127.0.0.1:8880:8880` in the `docker run` command above, to prevent direct access to the unencrypted port.
 
-The Kokoro model (~320 MB) is downloaded and cached on first start. Check the logs to confirm the server is ready:
+The standard Kokoro model (~320 MB) is downloaded and cached on first start. The German Martin voice downloads its dedicated model (~328 MB) when first selected. Check the logs to confirm the server is ready:
 
 ```bash
 docker logs kokoro
@@ -100,7 +100,7 @@ curl http://your_server_ip:8880/v1/audio/speech \
 
 - A Linux server (local or cloud) with Docker installed
 - Supported architectures: `amd64` (x86_64), `arm64` (e.g. Raspberry Pi 4/5, AWS Graviton)
-- Minimum RAM: ~1.5 GB free (model is ~320 MB; PyTorch runtime uses additional memory)
+- Minimum RAM: ~1.5 GB free for one loaded model. Using standard and German voices in the same process keeps both models resident and requires additional memory.
 - Internet access for the initial model download (the model is cached locally afterwards). Not required if using `KOKORO_LOCAL_ONLY=true` with a pre-cached model.
 
 **For GPU acceleration (`:cuda` image):**
@@ -146,7 +146,7 @@ This Docker image uses the following variables, that can be declared in an `env`
 | `KOKORO_VOICE` | Default voice for synthesis. See [voices](#available-voices) for all options. Accepts Kokoro voice IDs (`af_heart`) or OpenAI aliases (`alloy`, `ballad`, etc.). | `af_heart` |
 | `KOKORO_SPEED` | Default speech speed. Range: `0.25` (slowest) to `4.0` (fastest). | `1.0` |
 | `KOKORO_PORT` | HTTP port for the API (1–65535). | `8880` |
-| `KOKORO_LANG_CODE` | If set, loads only that language pipeline at startup (`a`=American English, `b`=British English, `e`=Spanish, `f`=French, `h`=Hindi, `i`=Italian, `j`=Japanese, `p`=Brazilian Portuguese, `z`=Mandarin Chinese). When unset, the pipeline is auto-selected from the `KOKORO_VOICE` prefix. Additional pipelines are created on demand when a request uses a different language. | *(not set)* |
+| `KOKORO_LANG_CODE` | If set, loads only that language pipeline at startup (`a`=American English, `b`=British English, `d`=German, `e`=Spanish, `f`=French, `h`=Hindi, `i`=Italian, `j`=Japanese, `p`=Brazilian Portuguese, `z`=Mandarin Chinese). When unset, the pipeline is auto-selected from the `KOKORO_VOICE` prefix. Additional pipelines are created on demand when a request uses a different language. | *(not set)* |
 | `KOKORO_API_KEY` | Optional Bearer token. Fresh persistent installs auto-generate one. If set, all API requests must include `Authorization: Bearer <key>`. Set explicitly empty to disable authentication. | Auto-generated for fresh persistent installs |
 | `KOKORO_LOG_LEVEL` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. | `INFO` |
 | `KOKORO_LOCAL_ONLY` | When set to any non-empty value (e.g. `true`), disables all HuggingFace model downloads. For offline or air-gapped deployments with pre-cached model. | *(not set)* |
@@ -393,6 +393,12 @@ docker exec kokoro kokoro_manage --listvoices
 | `bm_daniel` | Male | Calm |
 | `bm_fable` | Male | Expressive |
 
+**German:**
+
+| Voice ID | Gender | Style |
+|---|---|---|
+| `dm_martin` | Male | Martin — community fine-tune using a dedicated German model |
+
 **Japanese:** `jf_alpha`, `jf_gongitsune`, `jf_nezumi`, `jf_tebukuro`, `jm_kumo`
 
 **Mandarin Chinese:** `zf_xiaobei`, `zf_xiaoni`, `zf_xiaoxiao`, `zf_xiaoyi`, `zm_yunjian`, `zm_yunxi`, `zm_yunxia`, `zm_yunyang`
@@ -425,9 +431,18 @@ docker exec kokoro kokoro_manage --listvoices
 | `marin` | `af_nicole` |
 | `cedar` | `am_adam` |
 
-> **Tip:** The server automatically selects the correct language pipeline from the voice ID prefix — no configuration needed. For example, `jf_alpha` loads the Japanese pipeline, `bf_emma` loads British English. Additional language pipelines are created on demand when needed.
+> **Tip:** The server automatically selects the correct language pipeline from the voice ID prefix — no configuration needed. For example, `dm_martin` loads the German model and pipeline, `jf_alpha` loads Japanese, and `bf_emma` loads British English. Additional pipelines are created on demand when needed.
 
-All voices use a single shared model file (~320 MB). No re-download is needed when switching voices.
+The standard voices share Kokoro-82M (~320 MB). `dm_martin` uses a separate Kokoro-compatible German model (~328 MB) and matching voicepack, downloaded once from [`kikiri-tts/kikiri-german-martin`](https://huggingface.co/kikiri-tts/kikiri-german-martin) and cached in the same Docker volume. The German model and voicepack are Apache-2.0 licensed.
+
+German synthesis example:
+
+```bash
+curl http://your_server_ip:8880/v1/audio/speech \
+    -H "Content-Type: application/json" \
+    -d '{"model":"tts-1","input":"Guten Tag, wie geht es Ihnen?","voice":"dm_martin","response_format":"wav"}' \
+    --output german.wav
+```
 
 ## Persistent data
 
@@ -441,7 +456,7 @@ All server data is stored in the Docker volume (`/var/lib/kokoro` inside the con
 └── .server_addr                   # Cached server IP (used by kokoro_manage)
 ```
 
-Back up the Docker volume to preserve the downloaded model. The model is ~320 MB and only needs to be downloaded once.
+Back up the Docker volume to preserve downloaded models. Standard Kokoro is ~320 MB and German Martin adds ~328 MB; each is downloaded only once.
 
 ## Managing the server
 
@@ -461,7 +476,7 @@ docker exec kokoro kokoro_manage --listvoices
 
 ## Changing the voice
 
-To change the default voice, update `KOKORO_VOICE` in your `kokoro.env` file and restart the container. No model re-download is required — all voices use the same Kokoro-82M model.
+To change the default voice, update `KOKORO_VOICE` in your `kokoro.env` file and restart the container. Standard voices reuse Kokoro-82M. Selecting `dm_martin` downloads and caches its dedicated German model on first use.
 
 ```bash
 # Edit kokoro.env: set KOKORO_VOICE=bm_george

@@ -8,6 +8,9 @@ FROM python:3.12-slim
 
 WORKDIR /opt/src
 
+ARG KOKORO_GIT_SHA=b96fef95e6a746495f92443fac7c688f90fc57fc
+ARG MISAKI_GIT_SHA=9cda9268309160120fffee216280a9ca83ac4644
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
@@ -18,15 +21,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Note: ffmpeg from Debian repos is licensed under LGPL 2.1+/GPL 2+.
 # See: https://ffmpeg.org/legal.html
 RUN set -x \
+    && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends build-essential cmake curl espeak-ng ffmpeg libsndfile1 \
     && python3 -m venv /opt/venv \
     && pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu129 \
     && pip install --no-cache-dir --uploaded-prior-to P3D \
-         "kokoro>=0.9" \
-         "misaki[ja]" \
-         "misaki[zh]" \
+         "kokoro @ https://github.com/semidark/kokoro/archive/${KOKORO_GIT_SHA}.tar.gz" \
+         "misaki[de,ja,zh] @ https://github.com/semidark/misaki/archive/${MISAKI_GIT_SHA}.tar.gz" \
          soundfile \
          fastapi \
          "uvicorn[standard]" \

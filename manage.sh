@@ -44,6 +44,7 @@ Available voice IDs (Kokoro native):
                            am_liam, am_onyx, am_puck, am_santa
   British English female:  bf_emma, bf_isabella, bf_alice, bf_lily
   British English male:    bm_george, bm_lewis, bm_daniel, bm_fable
+  German male:             dm_martin
   Japanese female:         jf_alpha, jf_gongitsune, jf_nezumi, jf_tebukuro
   Japanese male:           jm_kumo
   Mandarin Chinese female: zf_xiaobei, zf_xiaoni, zf_xiaoxiao, zf_xiaoyi
@@ -64,8 +65,8 @@ OpenAI voice aliases (mapped to Kokoro voices):
   ash   → am_michael  coral → af_heart  sage → af_sky  verse → bm_george
 
 To change the active voice, set KOKORO_VOICE=<voice> in your env file and
-restart the container. No model download is needed — all voices use the
-same Kokoro-82M model file.
+restart the container. German Martin uses a dedicated model downloaded and
+cached on first use; the other voices share Kokoro-82M.
 
 Examples:
   docker exec kokoro kokoro_manage --showinfo
@@ -296,6 +297,10 @@ Available Kokoro voice IDs:
   bm_daniel    Calm
   bm_fable     Expressive
 
+  German — Male
+  -------------
+  dm_martin    Martin (community fine-tune; dedicated German model)
+
   Japanese — Female
   -----------------
   jf_alpha
@@ -368,12 +373,13 @@ OpenAI voice aliases (use these if your app sends OpenAI voice names):
   verse → bm_george
 
 Notes:
-  - All voices use the same Kokoro-82M model (~320 MB, cached in /var/lib/kokoro).
-  - No re-download is required when switching voices.
+  - Standard voices share Kokoro-82M (~320 MB, cached in /var/lib/kokoro).
+  - dm_martin uses a dedicated German model (~328 MB) and matching voicepack,
+    both downloaded once and cached in /var/lib/kokoro.
   - To change the default voice, set KOKORO_VOICE=<voice_id> in your env file
     and restart the container.
   - Set KOKORO_LANG_CODE to match the language of your chosen voice:
-      a=American English, b=British English, e=Spanish, f=French,
+      a=American English, b=British English, d=German, e=Spanish, f=French,
       h=Hindi, i=Italian, j=Japanese, p=Brazilian Portuguese, z=Mandarin Chinese
   - When KOKORO_LANG_CODE is unset, it is auto-derived from the voice ID prefix.
 

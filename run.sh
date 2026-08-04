@@ -73,6 +73,7 @@ fi
 # Validate voice name (Kokoro native prefix or OpenAI alias)
 case "$KOKORO_VOICE" in
   af_*|am_*|bf_*|bm_*) ;;
+  dm_martin) ;;
   ef_*|em_*) ;;
   ff_*) ;;
   hf_*|hm_*) ;;
@@ -81,13 +82,13 @@ case "$KOKORO_VOICE" in
   pf_*|pm_*) ;;
   zf_*|zm_*) ;;
   alloy|echo|fable|onyx|nova|shimmer|ash|coral|sage|verse) ;;
-  *) exiterr "KOKORO_VOICE '$KOKORO_VOICE' is not recognized. Use a Kokoro voice ID (e.g. af_heart, bm_george, jf_alpha) or an OpenAI alias (e.g. alloy, nova)." ;;
+  *) exiterr "KOKORO_VOICE '$KOKORO_VOICE' is not recognized. Use a Kokoro voice ID (e.g. af_heart, bm_george, dm_martin, jf_alpha) or an OpenAI alias (e.g. alloy, nova)." ;;
 esac
 
 # Validate lang code (optional — when unset, the pipeline is auto-selected from the voice ID)
 case "$KOKORO_LANG_CODE" in
-  a|b|e|f|h|i|j|p|z|"") ;;
-  *) exiterr "KOKORO_LANG_CODE '$KOKORO_LANG_CODE' is not recognized. Valid codes: a (American English), b (British English), e (Spanish), f (French), h (Hindi), i (Italian), j (Japanese), p (Brazilian Portuguese), z (Mandarin Chinese)." ;;
+  a|b|d|e|f|h|i|j|p|z|"") ;;
+  *) exiterr "KOKORO_LANG_CODE '$KOKORO_LANG_CODE' is not recognized. Valid codes: a (American English), b (British English), d (German), e (Spanish), f (French), h (Hindi), i (Italian), j (Japanese), p (Brazilian Portuguese), z (Mandarin Chinese)." ;;
 esac
 
 # Validate speed
@@ -272,7 +273,12 @@ if [ -n "$KOKORO_LOCAL_ONLY" ]; then
 fi
 
 if [ -z "$KOKORO_LOCAL_ONLY" ]; then
-  if [ ! -d "/var/lib/kokoro/hub/models--hexgrad--Kokoro-82M" ]; then
+  if [ "$KOKORO_VOICE" = "dm_martin" ] \
+    && [ ! -d "/var/lib/kokoro/hub/models--kikiri-tts--kikiri-german-martin" ]; then
+    echo
+    echo "Note: German Martin model not found in cache. It will be downloaded"
+    echo "      from HuggingFace on first start (~328 MB plus voicepack)."
+  elif [ ! -d "/var/lib/kokoro/hub/models--hexgrad--Kokoro-82M" ]; then
     echo
     echo "Note: Kokoro model not found in cache. It will be downloaded"
     echo "      from HuggingFace on first start (~320 MB)."

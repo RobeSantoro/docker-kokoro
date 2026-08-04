@@ -82,6 +82,8 @@ KOKORO_VOICES = {
     "bm_lewis":      "British male — smooth",
     "bm_daniel":     "British male — calm",
     "bm_fable":      "British male — expressive",
+    # German male (community fine-tune; uses a dedicated model)
+    "dm_martin":     "German male — Martin (community fine-tune)",
     # Japanese female
     "jf_alpha":      "Japanese female",
     "jf_gongitsune": "Japanese female",
@@ -140,6 +142,20 @@ _OPENAI_VOICE_MAP = {
     "cedar":   "am_adam",
 }
 
+# German voices are full fine-tunes, not voicepacks for the shared
+# hexgrad/Kokoro-82M weights. Keep each model and its matching voicepack
+# together and pin the HuggingFace revision for reproducible deployments.
+_BASE_MODEL_REPO_ID = "hexgrad/Kokoro-82M"
+_BASE_MODEL_REVISION = "f3ff3571791e39611d31c381e3a41a3af07b4987"
+_GERMAN_VOICE_MODELS = {
+    "dm_martin": {
+        "repo_id": "kikiri-tts/kikiri-german-martin",
+        "revision": "1e9dcd16ed48fda0a7a1f62e5e37130a5fdf10d9",
+        "model_filename": "kikiri_german_martin_ep10.pth",
+        "voice_filename": "voices/martin.pt",
+    },
+}
+
 
 class VoiceReference(BaseModel):
     id: str = Field(..., description="Local Kokoro voice ID or supported OpenAI voice alias.")
@@ -185,84 +201,142 @@ def _resolve_voice(voice: Union[str, VoiceReference, dict[str, Any]]) -> str:
 # ---------------------------------------------------------------------------
 # Model — loaded once at startup via the FastAPI lifespan hook
 #
-# One KPipeline instance is kept per language code.  At startup, the pipeline
-# for the default voice's language is loaded (derived from the first character
-# of KOKORO_VOICE, e.g. "af_heart" → 'a', "jf_alpha" → 'j').  If
-# KOKORO_LANG_CODE is set explicitly, that pipeline is loaded instead.
+# One KPipeline instance is kept per shared-model language code. German
+# community voices use dedicated fine-tuned models, so their pipelines are
+# cached by voice ID instead. At startup, the pipeline for the configured
+# default voice/language is loaded.
 #
 # When a request uses a voice from a different language, the required pipeline
 # is created on demand by _get_pipeline() and cached for subsequent requests.
 # ---------------------------------------------------------------------------
 
-_pipelines: dict = {}   # lang_code → KPipeline instance
+_pipelines: dict = {}   # lang_code or "voice:<voice_id>" → KPipeline instance
 
 # Serialise all inference calls (batch and streaming) so the KPipeline is
 # never invoked concurrently from multiple async tasks / threads.
 _inference_lock = threading.Lock()
 
 
-def _load_model() -> None:
-    """Import and initialise Kokoro KPipeline instance(s) from environment config."""
-    global _pipelines
-
-    from kokoro import KPipeline  # deferred — keeps import fast
-
-    local_files_only = bool(os.environ.get("KOKORO_LOCAL_ONLY", "").strip())
-
-    if local_files_only:
+def _local_files_only() -> bool:
+    """Return whether HuggingFace downloads are disabled for this process."""
+    local_only = bool(os.environ.get("KOKORO_LOCAL_ONLY", "").strip())
+    if local_only:
         # HF_HUB_OFFLINE prevents huggingface_hub from making any network requests.
         # HUGGINGFACE_HUB_OFFLINE is the older name kept for compatibility.
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["HUGGINGFACE_HUB_OFFLINE"] = "1"
+    return local_only
 
-    # Determine which lang_code to load at startup.
-    # If KOKORO_LANG_CODE is set explicitly, use it.
-    # Otherwise derive the lang code from the first character of KOKORO_VOICE
-    # (e.g. "af_heart" → "a", "jf_alpha" → "j"). Additional pipelines for
-    # other languages are created lazily on first request via _get_pipeline().
-    env_lang = os.environ.get("KOKORO_LANG_CODE", "").strip()
-    if env_lang:
-        codes_to_load = [env_lang]
-    else:
-        default_voice = os.environ.get("KOKORO_VOICE", "af_heart").strip()
-        codes_to_load = [default_voice[0].lower()] if default_voice else ["a"]
 
-    for code in codes_to_load:
+def _create_pipeline(lang_code: str, voice_id: Optional[str] = None):
+    """Create a shared Kokoro pipeline or a dedicated German voice pipeline."""
+    from kokoro import KModel, KPipeline  # deferred — keeps module import fast
+
+    local_only = _local_files_only()
+    german_spec = _GERMAN_VOICE_MODELS.get(voice_id or "")
+    if german_spec is None:
+        return KPipeline(lang_code=lang_code)
+
+    from huggingface_hub import hf_hub_download
+    import torch
+
+    logger.info(
+        "Downloading/loading German model assets | voice=%s repo=%s revision=%s local_only=%s",
+        voice_id,
+        german_spec["repo_id"],
+        german_spec["revision"],
+        local_only,
+    )
+    model_path = hf_hub_download(
+        repo_id=german_spec["repo_id"],
+        filename=german_spec["model_filename"],
+        revision=german_spec["revision"],
+        local_files_only=local_only,
+    )
+    voice_path = hf_hub_download(
+        repo_id=german_spec["repo_id"],
+        filename=german_spec["voice_filename"],
+        revision=german_spec["revision"],
+        local_files_only=local_only,
+    )
+    config_path = hf_hub_download(
+        repo_id=_BASE_MODEL_REPO_ID,
+        filename="config.json",
+        revision=_BASE_MODEL_REVISION,
+        local_files_only=local_only,
+    )
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = KModel(
+        repo_id=_BASE_MODEL_REPO_ID,
+        config=config_path,
+        model=model_path,
+    ).to(device).eval()
+    pipeline = KPipeline(
+        lang_code="d",
+        repo_id=_BASE_MODEL_REPO_ID,
+        model=model,
+    )
+    # Register the locally downloaded voice tensor under the public API ID so
+    # existing synthesis paths can continue passing voice="dm_martin".
+    pipeline.voices[voice_id] = torch.load(
+        voice_path,
+        map_location="cpu",
+        weights_only=True,
+    )
+    return pipeline
+
+
+def _get_or_create_pipeline(cache_key: str, lang_code: str, voice_id: Optional[str] = None):
+    """Return a cached pipeline, creating it once under the inference lock."""
+    if cache_key not in _pipelines:
         logger.info(
-            "Loading Kokoro TTS pipeline | lang_code=%s local_only=%s",
-            code, local_files_only,
+            "Creating pipeline | cache_key=%s lang_code=%s voice=%s local_only=%s",
+            cache_key,
+            lang_code,
+            voice_id or "shared",
+            _local_files_only(),
         )
-        t0 = time.monotonic()
-        _pipelines[code] = KPipeline(lang_code=code)
-        logger.info("Pipeline lang_code='%s' ready in %.1fs", code, time.monotonic() - t0)
+        with _inference_lock:
+            # Double-check inside the lock to avoid duplicate model creation.
+            if cache_key not in _pipelines:
+                t0 = time.monotonic()
+                _pipelines[cache_key] = _create_pipeline(lang_code, voice_id)
+                logger.info("Pipeline '%s' ready in %.1fs", cache_key, time.monotonic() - t0)
+    return _pipelines[cache_key]
 
 
 def _get_pipeline(voice_id: str):
     """
-    Return the KPipeline instance whose lang_code matches the voice ID prefix.
-    Kokoro voice IDs follow the convention <lang><gender>_<name>, where the
-    first character is the language code (a=American English, b=British English,
-    e=Spanish, f=French, h=Hindi, i=Italian, j=Japanese, p=Brazilian Portuguese,
-    z=Mandarin Chinese).
-    If the required pipeline has not been loaded yet, it is created on demand
-    and cached for subsequent requests.
+    Return the pipeline matching a voice ID.
+
+    Standard Kokoro voices share a model and are cached by language code.
+    German community voices are full fine-tunes and are cached by voice ID so
+    additional German voices can safely use their own matching model weights.
     """
     lang_code = voice_id[0].lower() if voice_id else "a"
-    if lang_code not in _pipelines:
-        from kokoro import KPipeline  # deferred import (already imported in _load_model)
-        local_files_only = bool(os.environ.get("KOKORO_LOCAL_ONLY", "").strip())
-        if local_files_only:
-            os.environ["HF_HUB_OFFLINE"] = "1"
-            os.environ["HUGGINGFACE_HUB_OFFLINE"] = "1"
-        logger.info(
-            "Creating pipeline on demand | lang_code=%s local_only=%s",
-            lang_code, local_files_only,
-        )
-        with _inference_lock:
-            # Double-check inside the lock to avoid duplicate creation
-            if lang_code not in _pipelines:
-                _pipelines[lang_code] = KPipeline(lang_code=lang_code)
-    return _pipelines[lang_code]
+    if lang_code == "d":
+        if voice_id not in _GERMAN_VOICE_MODELS:
+            raise ValueError(f"No German model is configured for voice '{voice_id}'.")
+        return _get_or_create_pipeline(f"voice:{voice_id}", "d", voice_id)
+    return _get_or_create_pipeline(lang_code, lang_code)
+
+
+def _load_model() -> None:
+    """Initialise the configured startup pipeline; other models remain lazy."""
+    _local_files_only()
+    env_lang = os.environ.get("KOKORO_LANG_CODE", "").strip().lower()
+    configured_voice = os.environ.get("KOKORO_VOICE", "af_heart").strip().lower()
+    default_voice = _OPENAI_VOICE_MAP.get(configured_voice, configured_voice)
+
+    if env_lang:
+        if env_lang == "d":
+            german_voice = default_voice if default_voice in _GERMAN_VOICE_MODELS else "dm_martin"
+            _get_pipeline(german_voice)
+        else:
+            _get_or_create_pipeline(env_lang, env_lang)
+    else:
+        _get_pipeline(default_voice)
 
 
 @asynccontextmanager

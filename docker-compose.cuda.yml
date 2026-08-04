@@ -1,6 +1,6 @@
 services:
   kokoro:
-    image: hwdsl2/kokoro-server:cuda
+    image: kokoro-server:german
     container_name: kokoro
     restart: always
     # Docker Desktop for Linux runs in a VM without NVIDIA GPU passthrough.
@@ -10,6 +10,8 @@ services:
       NVIDIA_VISIBLE_DEVICES: "${NVIDIA_VISIBLE_DEVICES:-0}"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
       KOKORO_DISABLE_USAGE_COUNTS: "1"
+      KOKORO_VOICE: "dm_martin"
+      KOKORO_LANG_CODE: "d"
     ports:
       - "127.0.0.1:8880:8880/tcp"
     volumes:
