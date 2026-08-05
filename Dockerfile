@@ -26,11 +26,7 @@ RUN set -x \
     && python3 -m venv /opt/venv \
     && pip install --no-cache-dir --upgrade pip \
     && ARCH=$(uname -m) \
-    && if [ "$ARCH" = "x86_64" ]; then \
-         pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu; \
-       else \
-         pip install --no-cache-dir torch; \
-       fi \
+    && pip install --no-cache-dir "torch==2.13.0+cpu" --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir --uploaded-prior-to P3D \
          "kokoro @ https://github.com/semidark/kokoro/archive/${KOKORO_GIT_SHA}.tar.gz" \
          "misaki[de,ja,zh] @ https://github.com/semidark/misaki/archive/${MISAKI_GIT_SHA}.tar.gz" \
